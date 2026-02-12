@@ -116,35 +116,19 @@ create_service_directory() {
     success "Service directory created"
 }
 
-# Clone or update repository
+# Setup repository files
 setup_repository() {
     log "Setting up service repository..."
     
-    # Check if we're running from within the repository
-    if [[ -f "../Backend/server.py" ]] && [[ -f "../Backend/requirements.txt" ]]; then
-        log "Repository found locally, copying from current location..."
-        
-        # Copy repository contents to service directory
-        rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
-               ../ "$SERVICE_DIR/"
-        
-        # Initialize git repository if not present
-        if [[ ! -d "$SERVICE_DIR/.git" ]]; then
-            cd "$SERVICE_DIR"
-            sudo -u "$SERVICE_USER" git init
-            sudo -u "$SERVICE_USER" git remote add origin "$REPO_URL"
-        fi
-        
-    elif [[ -d "$SERVICE_DIR/.git" ]]; then
-        log "Repository exists in service directory, updating..."
-        cd "$SERVICE_DIR"
-        sudo -u "$SERVICE_USER" git pull origin main
-        
-    else
-        log "Cloning repository from remote..."
-        cd "$SERVICE_DIR"
-        sudo -u "$SERVICE_USER" git clone "$REPO_URL" .
-    fi
+    # Get the directory where this script is located (original repository)
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    
+    log "Repository found locally at: $SCRIPT_DIR"
+    log "Copying from local repository..."
+    
+    # Copy repository contents to service directory
+    rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
+           "$SCRIPT_DIR/" "$SERVICE_DIR/"
     
     # Set proper ownership
     chown -R "$SERVICE_USER:$SERVICE_USER" "$SERVICE_DIR"
