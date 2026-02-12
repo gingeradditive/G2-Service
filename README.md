@@ -37,6 +37,66 @@ G1-Config is a project by Ginger for configuring the G1 3D printer. This guide w
 - **Backup:** It is always a good idea to back up your current configurations before performing updates or changes.
 - **Support:** If you encounter any issues during the installation, contact Ginger's technical support.
 
+## Additional Scripts
+
+### Complete WiFi Setup for USB Dongle
+Complete automated pipeline script that installs drivers and configures WiFi network for USB dongles:
+
+```sh
+sudo ./G1-Configs/Scripts/setup_wifi_complete.sh
+```
+
+This script will:
+- **Check connected USB devices** and identify WiFi dongles
+- **Install WiFi drivers and firmware** automatically if needed
+- **Load appropriate kernel modules** for common chipsets
+- **Generate unique SSID** using format "G2TabletNetwork-######" (last 6 chars of wlan0 MAC)
+- **Generate deterministic password** from SHA256 hash of wlan0 MAC address (format: G2 + 16 hash chars)
+- **Configure hidden WiFi network** (SSID not broadcasted for security)
+- **Configure network settings** and test connection
+- **Save credentials** to `/home/pi/wifi_credentials.txt`
+- **Generate WiFi QR code** at `~/printer_data/config/wifi_qr.png` with text overlay and decorations
+- **Display IP address** and connection status
+
+**Smart Features:**
+- **Automatic driver detection** - Only installs drivers if wlan1 is not found
+- **Comprehensive chipset support** - Realtek, Ralink, MediaTek, Atheros, Broadcom
+- **Error recovery** - Provides troubleshooting steps if setup fails
+- **Zero-interaction** - Fully automated pipeline script
+
+**Requirements:**
+- USB WiFi dongle connected to the Raspberry Pi
+- wlan0 interface available for MAC address generation
+- sudo privileges to modify network configuration
+
+**Note:** This single script replaces both the dongle setup and WiFi configuration scripts.
+
+**Generated Files:**
+- `/home/pi/wifi_credentials.txt` - Contains SSID, password, and network details (including hidden network info)
+- `~/printer_data/config/wifi_qr.png` - Enhanced QR code with text overlay showing SSID, password, and styling (overwritten each run)
+
+**Enhanced QR Code Features:**
+- **Text Overlay** - Displays SSID and password directly on the image
+- **White Border** - 50px white space around QR code for better visibility
+- **Decorative Elements** - Professional styling with headers and footers
+- **Hidden Network Indicator** - "Hidden Network - Scan to Connect" text
+- **High Quality** - Larger QR code size (10px per module) for better scanning
+- **Professional Layout** - Clean design with proper typography and spacing
+
+**Deterministic Password Generation:**
+- **MAC-based hash** - Password generated from SHA256 hash of wlan0 MAC address
+- **Format**: G2XXXXXXXXXXXXXXXX (G2 + first 16 characters of SHA256 hash)
+- **Secure** - Hash provides cryptographic security while remaining deterministic
+- **Deterministic** - Same MAC always generates same password hash
+- **Unique per device** - Different MAC addresses produce different hash values
+- **Non-reversible** - MAC address cannot be determined from the password
+
+**Hidden Network Features:**
+- **SSID not broadcasted** - Network won't appear in WiFi scans for enhanced security
+- **scan_ssid=1** - Configured to actively probe for the hidden network
+- **QR code includes H:true** - Indicates hidden network in QR code format
+- **Manual connection required** - Devices must know exact SSID to connect
+
 ## License
 This project is released under the MIT license. For more details, see the LICENSE file.
 
