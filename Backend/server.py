@@ -1,8 +1,7 @@
 """
-G1 Printer Configuration Backend API
+G2 Printer Configuration Backend API
 
-RESTful API backend for managing G1 3D printer configuration, updates, and system operations.
-Migrated from Flask to FastAPI for better performance and automatic API documentation.
+RESTful API backend for managing G2 3D printer configuration, updates, and system operations.
 """
 
 from fastapi import FastAPI, HTTPException, status, Query, Form
@@ -25,8 +24,8 @@ import scripts.checkforupdate_script as checkforupdate_script
 import scripts.factoryreset_script as factoryreset_script
 
 app = FastAPI(
-    title="G1 Printer Configuration API",
-    description="RESTful API for managing G1 3D printer configuration, updates, and system operations",
+    title="G2 Printer Configuration API",
+    description="RESTful API for managing G2 3D printer configuration, updates, and system operations",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -144,7 +143,7 @@ async def get_timezones():
     "/init",
     response_model=APIResponse,
     summary="Initialize Printer",
-    description="Initialize the G1 printer with serial number and timezone configuration",
+    description="Initialize the G2 printer with serial number and timezone configuration",
     tags=["Printer Management"],
     responses={
         200: {"description": "Printer initialized successfully"},
@@ -153,7 +152,7 @@ async def get_timezones():
     }
 )
 async def initialize_printer(
-    serial: str = Query(..., description="Printer serial number (e.g., G1-0000-00)", min_length=1, max_length=50),
+    serial: str = Query(..., description="Printer serial number (e.g., G2-0000-00)", min_length=1, max_length=50),
     timezone: str = Query(..., description="System timezone (e.g., Europe/London)", min_length=1, max_length=50)
 ):
     """Initialize printer with provided serial number and timezone"""
@@ -176,7 +175,7 @@ async def initialize_printer(
     "/update",
     response_model=APIResponse,
     summary="Update Printer System",
-    description="Perform system update for the G1 printer",
+    description="Perform system update for the G2 printer",
     tags=["System Management"],
     responses={
         200: {"description": "Update completed successfully"},

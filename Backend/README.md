@@ -1,19 +1,15 @@
-# G1 Printer Configuration Backend API
+# G2 Printer Configuration Backend API
 
-RESTful API backend for managing G1 3D printer configuration, updates, and system operations.
+RESTful API backend for managing G2 3D printer configuration, updates, and system operations.
 
 ## Overview
 
-This backend service provides a comprehensive API for G1 printer management, including:
+This backend service provides a comprehensive API for G2 printer management, including:
 - Printer initialization and configuration
 - System updates and maintenance
 - Network configuration
 - Factory reset operations
 - Health monitoring
-
-## Migration
-
-Successfully migrated from Flask to FastAPI for improved performance, automatic API documentation, and better async support.
 
 ## Installation
 

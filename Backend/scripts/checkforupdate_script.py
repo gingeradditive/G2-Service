@@ -52,13 +52,13 @@ def run():
     else:
         configPath = os.path.normpath(os.path.join("/home", "pi", "printer_data", "config"))
         databasePath = os.path.normpath(os.path.join("/home", "pi", "printer_data", "database"))
-        backupConfigPath = os.path.normpath(os.path.join("/home", "pi", "G1-Configs", "Configs"))
-        backupStylesPath = os.path.normpath(os.path.join("/home", "pi", "G1-Configs", "Styles"))
-        backupDatabasePath = os.path.normpath(os.path.join("/home", "pi", "G1-Configs", "Database"))
+        backupConfigPath = os.path.normpath(os.path.join("/home", "pi", "G2-Service", "Configs"))
+        backupStylesPath = os.path.normpath(os.path.join("/home", "pi", "G2-Service", "Styles"))
+        backupDatabasePath = os.path.normpath(os.path.join("/home", "pi", "G2-Service", "Database"))
 
     # --- Controllo presenza file G1.Conf ---
     g1_conf_path = os.path.join(databasePath, "G1.Conf")
-    update_file_path = os.path.join(databasePath, "G1-Update.temp")
+    update_file_path = os.path.join(databasePath, "G2-Update.temp")
 
     if not os.path.exists(g1_conf_path):
         print(f"[CheckForUpdate Script] File not found: {g1_conf_path}")
@@ -80,7 +80,7 @@ def run():
     print(f"[CheckForUpdate Script] Serial: {serial_number}")
 
     # --- Imposta variabili GitHub ---
-    GITHUB_REPO = "gingeradditive/G1-Printers"
+    GITHUB_REPO = "gingeradditive/G2-Printers"
     GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}"
     files_to_update = []
 
@@ -139,7 +139,7 @@ def run():
         with open(update_file_path, "w") as f:
             json.dump(all_updates, f, indent=2)
     except Exception as e:
-        print(f"[CheckForUpdate Script] Errore nel salvataggio di G1-Update.temp: {e}")
+        print(f"[CheckForUpdate Script] Errore nel salvataggio di G2-Update.temp: {e}")
         return ""
 
     has_updates = bool(files_to_update or moonraker_updates)

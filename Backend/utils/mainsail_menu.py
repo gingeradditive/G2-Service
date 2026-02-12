@@ -24,11 +24,11 @@ class UpdateMainsailMenu:
                 os.path.join("/home", "pi", "printer_data", "database"))
 
             self.backupConfigPath = os.path.normpath(
-                os.path.join("/home", "pi", "G1-Configs", "Configs"))
+                os.path.join("/home", "pi", "G2-Service", "Configs"))
             self.backupStylesPath = os.path.normpath(
-                os.path.join("/home", "pi", "G1-Configs", "Styles"))
+                os.path.join("/home", "pi", "G2-Service", "Styles"))
             self.backupDatabasePath = os.path.normpath(
-                os.path.join("/home", "pi", "G1-Configs", "Database"))
+                os.path.join("/home", "pi", "G2-Service", "Database"))
 
     def set_to_system_ok(self, url):
         try:
@@ -69,7 +69,7 @@ class UpdateMainsailMenu:
             # contenuto da scrivere
             data = [
                 {
-                    "title": "UPDATE G1",
+                    "title": "UPDATE G2",
                     "href": f"{url}:5000/update",
                     "icon": "M6.5 20Q4.22 20 2.61 18.43 1 16.85 1 14.58 1 12.63 2.17 11.1 3.35 9.57 5.25 9.15 5.83 7.13 7.39 5.75 8.95 4.38 11 4.08V12.15L9.4 10.6L8 12L12 16L16 12L14.6 10.6L13 12.15V4.08Q15.58 4.43 17.29 6.39 19 8.35 19 11 20.73 11.2 21.86 12.5 23 13.78 23 15.5 23 17.38 21.69 18.69 20.38 20 18.5 20Z",
                     "position": 11,

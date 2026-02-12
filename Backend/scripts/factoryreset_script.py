@@ -18,14 +18,14 @@ def run():
         databasePath = os.path.normpath(os.path.join("/home", "pi", "printer_data", "database"))
 
     g1_conf_path = os.path.join(databasePath, "G1.Conf")
-    update_temp_path = os.path.join(databasePath, "G1-Update.temp")
+    update_temp_path = os.path.join(databasePath, "G2-Update.temp")
 
     try:
         # --- Carica file G1.Conf se esiste ---
         if not os.path.exists(g1_conf_path):
             print(f"[FactoryReset Script] Nessun file G1.Conf trovato ({g1_conf_path}).")
 
-            # Rimuove comunque il file G1-Update.temp se presente
+            # Rimuove comunque il file G2-Update.temp se presente
             if os.path.exists(update_temp_path):
                 os.remove(update_temp_path)
                 print(f"[FactoryReset Script] Rimosso file temporaneo: {update_temp_path}")
@@ -62,13 +62,13 @@ def run():
         except Exception as e:
             print(f"[FactoryReset Script] Errore durante la rimozione di G1.Conf: {e}")
 
-        # --- Elimina G1-Update.temp se presente ---
+        # --- Elimina G2-Update.temp se presente ---
         if os.path.exists(update_temp_path):
             try:
                 os.remove(update_temp_path)
                 print(f"[FactoryReset Script] Rimosso file temporaneo: {update_temp_path}")
             except Exception as e:
-                print(f"[FactoryReset Script] Errore durante la rimozione di G1-Update.temp: {e}")
+                print(f"[FactoryReset Script] Errore durante la rimozione di G2-Update.temp: {e}")
 
         print("[FactoryReset Script] Factory reset completato con successo.")
         return True

@@ -1,11 +1,11 @@
-# G1-Config
+# G2-Service
 
-G1-Config is a project by Ginger for configuring the G1 3D printer. This guide will help you install and update all necessary components to ensure your 3D printer operates at its best.
+G2-Service is a project by Ginger for configuring the G2 3D printer. This guide will help you install and update all necessary components to ensure your 3D printer operates at its best.
 
 ## Installation Guide
 
 ### Requirements
-- G1 3D Printer
+- G2 3D Printer
 - Access to the printer's local network
 - An SSH client (such as PuTTY)
 - A GitHub account
@@ -13,7 +13,7 @@ G1-Config is a project by Ginger for configuring the G1 3D printer. This guide w
 ### Instructions
 
 1. **Find the correct printer IP address**
-   - Use the Mainsail software to find the IP address of your G1 printer.
+   - Use the Mainsail software to find the IP address of your G2 printer.
    - Access Mainsail through your browser by entering the printer's IP address.
 
 2. **Log in to the machine page**
@@ -25,12 +25,12 @@ G1-Config is a project by Ginger for configuring the G1 3D printer. This guide w
 4. **Log in with SSH**
    - Use an SSH client like PuTTY to log in to your printer. You will need the printer's IP address and login credentials.
 
-5. **Clone the G1-Configs project**
-   - After logging in via SSH, run the following commands to clone the G1-Configs project and start the installation script:
+5. **Clone the G2-Service project**
+   - After logging in via SSH, run the following commands to clone the G2-Service project and start the installation script:
      ```sh
      cd ~
-     git clone https://github.com/gingeradditive/G1-Configs.git
-     sh ./G1-Configs/Scripts/install.sh 2>&1 | tee output.txt
+     git clone https://github.com/gingeradditive/G2-Service.git
+     sh ./G2-Service/Scripts/install.sh 2>&1 | tee output.txt
      ```
 
 ### Notes
@@ -43,7 +43,7 @@ G1-Config is a project by Ginger for configuring the G1 3D printer. This guide w
 Complete automated pipeline script that installs drivers and configures WiFi network for USB dongles:
 
 ```sh
-sudo ./G1-Configs/Scripts/setup_wifi_complete.sh
+sudo ./G2-Service/Scripts/setup_wifi_complete.sh
 ```
 
 This script will:

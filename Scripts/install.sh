@@ -16,79 +16,49 @@ echo "${RED}
 ~B@P!:. ..^J&&7                     :P@G7:.  .^7B@Y                             
   !P#######GJ:                        ~5B######BY^                              ${NC}"
 echo
-echo "G1-Config"
+echo "G2-Service"
 echo "Version 0.0.1 - By: Giacomo Guaresi"
 echo; echo
 
 
-SYMBOLIC_LINK_DESTINATION="$HOME/printer_data/config/G1-Configs"
-G1_CONFIGS_DIR="$HOME/G1-Configs/Configs"
-G1_DATABASE_DIR="$HOME/G1-Configs/Database"
-G1_GCODES_DIR="$HOME/G1-Configs/Gcodes"
+SYMBOLIC_LINK_DESTINATION="$HOME/printer_data/config/G2-Service"
+G2_SERVICE_DIR="$HOME/G2-Service/Configs"
+G2_DATABASE_DIR="$HOME/G2-Service/Database"
+G2_GCODES_DIR="$HOME/G2-Service/Gcodes"
 
 # Copy the files
-echo "Copying G1-Configs to printer_data/config"
-if [ -d "$G1_CONFIGS_DIR" ]; then
-    cp -r "$G1_CONFIGS_DIR"/* "$HOME/printer_data/config/"
-    echo "G1-Configs copied to printer_data/config"
+echo "Copying G2-Service to printer_data/config"
+if [ -d "$G2_SERVICE_DIR" ]; then
+    cp -r "$G2_SERVICE_DIR"/* "$HOME/printer_data/config/"
+    echo "G2-Service copied to printer_data/config"
 else
-    echo "G1-Configs directory does not exist."
+    echo "G2-Service directory does not exist."
     exit 1
 fi
 
-# Remove the existing G1-Configs folder or link if it exists
+# Remove the existing G2-Service folder or link if it exists
 if [ -e "$SYMBOLIC_LINK_DESTINATION" ]; then
     sudo rm -rf "$SYMBOLIC_LINK_DESTINATION"
-    echo "Existing G1-Configs removed"
+    echo "Existing G2-Service removed"
 fi
 
 # Create the symbolic link
-sudo ln -s "$HOME/G1-Configs/Configs/G1-Configs" "$SYMBOLIC_LINK_DESTINATION"
+sudo ln -s "$HOME/G2-Service/Configs" "$SYMBOLIC_LINK_DESTINATION"
 sudo chown -h pi:pi "$SYMBOLIC_LINK_DESTINATION"
 echo "Symbolic link created for Ginger Configs"
 
 echo "Install mainsail style"
 mkdir /home/pi/printer_data/config/.theme
-ln -sf $HOME/G1-Configs/Styles/mainsail-ginger/*.* "/home/pi/printer_data/config/.theme/"
+ln -sf $HOME/G2-Service/Styles/mainsail-ginger/*.* "/home/pi/printer_data/config/.theme/"
 
 # echo "Activate light mode default"
 # sed -i 's/"defaultMode": "dark"/"defaultMode": "light"/' /home/pi/mainsail/config.json
 
 
-echo "Installing Flask..."
-sudo pip3 install flask
-
-# Crea un servizio systemd per avviare automaticamente Flask all'avvio
-echo "Creating systemd service for Flask..."
-SERVICE_FILE="/etc/systemd/system/g1-flask.service"
-sudo bash -c "cat > $SERVICE_FILE" <<EOF
-[Unit]
-Description=Flask server for G1-Configs
-After=network.target
-
-[Service]
-User=root
-Group=root
-WorkingDirectory=/home/pi/G1-Configs/Flask
-ExecStart=/usr/bin/python3 /home/pi/G1-Configs/Flask/server.py
-Restart=always
-Environment="PYTHONUNBUFFERED=1"
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Abilita e avvia il servizio Flask
-sudo systemctl daemon-reload
-sudo systemctl enable g1-flask.service
-sudo systemctl start g1-flask.service
-
-echo "Flask service created and started successfully."
-
 echo "Restoring Moonraker DB..."
 mkdir "$HOME/printer_data/database/"
-cp -f "$G1_DATABASE_DIR"/moonraker-sql.db "$HOME/printer_data/database/"
+cp -f "$G2_DATABASE_DIR"/moonraker-sql.db "$HOME/printer_data/database/"
 
 echo "Copy factory gcodes..."
 mkdir -p "$HOME/printer_data/gcodes/"
-cp -rf "$G1_GCODES_DIR"/* "$HOME/printer_data/gcodes/"
+cp -rf "$G2_GCODES_DIR"/* "$HOME/printer_data/gcodes/"

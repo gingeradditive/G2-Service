@@ -81,10 +81,10 @@ def run():
     else:
         configPath = os.path.normpath(os.path.join("/home", "pi", "printer_data", "config"))
         databasePath = os.path.normpath(os.path.join("/home", "pi", "printer_data", "database"))
-        backupConfigPath = os.path.normpath(os.path.join("/home", "pi", "G1-Configs", "Configs"))
+        backupConfigPath = os.path.normpath(os.path.join("/home", "pi", "G2-Service", "Configs"))
 
     g1_conf_path = os.path.join(databasePath, "G1.Conf")
-    update_temp_path = os.path.join(databasePath, "G1-Update.temp")
+    update_temp_path = os.path.join(databasePath, "G2-Update.temp")
 
     if not os.path.exists(g1_conf_path):
         print(f"[Update Script] File non trovato: {g1_conf_path}")
@@ -115,7 +115,7 @@ def run():
     # --- Aggiornamento file GitHub ---
     if "files" in updates and updates["files"]:
         print("[Update Script] Inizio aggiornamento file di configurazione...")
-        GITHUB_REPO = "gingeradditive/G1-Printers"
+        GITHUB_REPO = "gingeradditive/G2-Printers"
         RAW_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 
         for f in updates["files"]:
