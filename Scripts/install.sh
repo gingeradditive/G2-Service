@@ -120,15 +120,34 @@ create_service_directory() {
 setup_repository() {
     log "Setting up service repository..."
     
-    if [[ -d "$SERVICE_DIR/.git" ]]; then
-        log "Repository exists, updating..."
+    # Check if we're running from within the repository
+    if [[ -f "../Backend/server.py" ]] && [[ -f "../Backend/requirements.txt" ]]; then
+        log "Repository found locally, copying from current location..."
+        
+        # Copy repository contents to service directory
+        rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
+               ../ "$SERVICE_DIR/"
+        
+        # Initialize git repository if not present
+        if [[ ! -d "$SERVICE_DIR/.git" ]]; then
+            cd "$SERVICE_DIR"
+            sudo -u "$SERVICE_USER" git init
+            sudo -u "$SERVICE_USER" git remote add origin "$REPO_URL"
+        fi
+        
+    elif [[ -d "$SERVICE_DIR/.git" ]]; then
+        log "Repository exists in service directory, updating..."
         cd "$SERVICE_DIR"
         sudo -u "$SERVICE_USER" git pull origin main
+        
     else
-        log "Cloning repository..."
+        log "Cloning repository from remote..."
         cd "$SERVICE_DIR"
         sudo -u "$SERVICE_USER" git clone "$REPO_URL" .
     fi
+    
+    # Set proper ownership
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$SERVICE_DIR"
     
     success "Repository setup complete"
 }
