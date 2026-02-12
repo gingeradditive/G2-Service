@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Init Device</title>
+</head>
+
+<body>
+    <h1>Initialize G1 Printer</h1>
+    <form method="post">
+        <div>
+            <label for="serial">Serial Number:</label><br>
+            <input type="text" id="serial" name="serial" placeholder="G1-0000-00" required><br><br>
+        </div>
+        <div>
+            <label for="timezone">Timezone:</label><br>
+            <select id="timezone" name="timezone" required>
+                {% for tz in timezones %}
+                <option value="{{ tz }}" {% if tz == "Europe/London" %}selected{% endif %}>{{ tz }}</option>
+                {% endfor %}
+            </select><br><br>
+        </div>
+        <button type="submit">Save</button>
+    </form>
+</body>
+</html>
