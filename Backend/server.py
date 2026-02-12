@@ -379,24 +379,96 @@ def parse_wifi_scan(output: str) -> List[WiFiNetwork]:
     networks = []
     lines = output.split('\n')
     
-    for line in lines:
-        if line.strip() and not line.startswith('bssid') and ':' in line:
-            # Parse line format: bssid / frequency / signal level / flags / ssid
-            parts = line.split('\t')
-            if len(parts) >= 5:
-                bssid = parts[0].strip()
-                frequency = parts[1].strip()
-                signal_str = parts[2].strip().replace('signal:', '').replace('dBm', '')
-                flags = parts[3].strip()
-                ssid = parts[4].strip()
-                
-                if ssid:  # Only include networks with SSID
-                    try:
-                        signal_strength = int(signal_str)
-                    except ValueError:
-                        signal_strength = None
+    # Try to detect the format and parse accordingly
+    if "bssid" in output.lower() and "\t" in output:
+        # iwlist format: bssid / frequency / signal level / flags / ssid
+        for line in lines:
+            if line.strip() and not line.startswith('bssid') and ':' in line:
+                parts = line.split('\t')
+                if len(parts) >= 5:
+                    bssid = parts[0].strip()
+                    frequency = parts[1].strip()
+                    signal_str = parts[2].strip().replace('signal:', '').replace('dBm', '')
+                    flags = parts[3].strip()
+                    ssid = parts[4].strip()
                     
-                    # Determine security type from flags
+                    if ssid:  # Only include networks with SSID
+                        try:
+                            signal_strength = int(signal_str)
+                        except ValueError:
+                            signal_strength = None
+                        
+                        # Determine security type from flags
+                        security = "Open"
+                        if "WPA2" in flags:
+                            security = "WPA2"
+                        elif "WPA" in flags:
+                            security = "WPA"
+                        elif "WEP" in flags:
+                            security = "WEP"
+                        
+                        # Determine frequency band
+                        freq_band = "2.4GHz" if "2412" in frequency or "2437" in frequency else "5GHz"
+                        
+                        networks.append(WiFiNetwork(
+                            ssid=ssid,
+                            bssid=bssid,
+                            signal_strength=signal_strength,
+                            security=security,
+                            frequency=freq_band
+                        ))
+    
+    elif "IN-USE" in output and "SSID" in output:
+        # nmcli format
+        for line in lines:
+            if line.strip() and not line.startswith('*') and not line.startswith('IN-USE'):
+                parts = line.split()
+                if len(parts) >= 8:
+                    ssid = ' '.join(parts[1:-5])  # SSID might contain spaces
+                    if ssid and ssid != '--':
+                        signal_str = parts[-5].replace('▂', '').replace('▄', '').replace('▆', '').replace('█', '')
+                        try:
+                            signal_strength = int(signal_str)
+                        except ValueError:
+                            signal_strength = None
+                        
+                        security = parts[-2]
+                        freq_band = "2.4GHz" if "2.4" in parts[-1] else "5GHz"
+                        
+                        networks.append(WiFiNetwork(
+                            ssid=ssid,
+                            bssid=None,
+                            signal_strength=signal_strength,
+                            security=security,
+                            frequency=freq_band
+                        ))
+    
+    elif "bssid" in output.lower() and "ssid" in output.lower():
+        # wpa_cli format
+        current_network = {}
+        for line in lines:
+            if line.strip():
+                if line.startswith('bssid'):
+                    if current_network and current_network.get('ssid'):
+                        # Add previous network
+                        networks.append(WiFiNetwork(
+                            ssid=current_network['ssid'],
+                            bssid=current_network.get('bssid'),
+                            signal_strength=current_network.get('signal_strength'),
+                            security=current_network.get('security', 'Open'),
+                            frequency=current_network.get('frequency', '2.4GHz')
+                        ))
+                    current_network = {'bssid': line.split('=')[1].strip() if '=' in line else line.split()[1].strip()}
+                elif line.startswith('ssid'):
+                    current_network['ssid'] = line.split('=')[1].strip() if '=' in line else ' '.join(line.split()[1:]).strip()
+                elif line.startswith('signal_level'):
+                    signal_str = line.split('=')[1].strip() if '=' in line else line.split()[1].strip()
+                    try:
+                        current_network['signal_strength'] = int(signal_str.replace('dBm', ''))
+                    except ValueError:
+                        current_network['signal_strength'] = None
+                elif line.startswith('flags'):
+                    flags = line.split('=')[1].strip() if '=' in line else ' '.join(line.split()[1:]).strip()
                     security = "Open"
                     if "WPA2" in flags:
                         security = "WPA2"
@@ -404,17 +476,17 @@ def parse_wifi_scan(output: str) -> List[WiFiNetwork]:
                         security = "WPA"
                     elif "WEP" in flags:
                         security = "WEP"
-                    
-                    # Determine frequency band
-                    freq_band = "2.4GHz" if "2412" in frequency or "2437" in frequency else "5GHz"
-                    
-                    networks.append(WiFiNetwork(
-                        ssid=ssid,
-                        bssid=bssid,
-                        signal_strength=signal_strength,
-                        security=security,
-                        frequency=freq_band
-                    ))
+                    current_network['security'] = security
+        
+        # Add the last network
+        if current_network and current_network.get('ssid'):
+            networks.append(WiFiNetwork(
+                ssid=current_network['ssid'],
+                bssid=current_network.get('bssid'),
+                signal_strength=current_network.get('signal_strength'),
+                security=current_network.get('security', 'Open'),
+                frequency=current_network.get('frequency', '2.4GHz')
+            ))
     
     return networks
 
@@ -459,6 +531,41 @@ def get_current_connection_info() -> CurrentNetworkInfo:
         )
     except Exception as e:
         return CurrentNetworkInfo()
+
+@app.get(
+    "/wifi/debug",
+    summary="Debug WiFi Scanning",
+    description="Debug endpoint to test WiFi scanning methods",
+    tags=["WiFi Management", "Debugging"]
+)
+async def debug_wifi_scanning():
+    """Debug WiFi scanning methods"""
+    debug_info = {}
+    
+    # Test each scanning method
+    methods = {
+        "iwlist": "iwlist wlan0 scan 2>/dev/null | head -20",
+        "nmcli": "nmcli dev wifi list 2>/dev/null | head -10",
+        "wpa_cli_scan": "wpa_cli -i wlan0 scan 2>/dev/null",
+        "wpa_cli_results": "wpa_cli -i wlan0 scan_results 2>/dev/null | head -20",
+        "iwconfig": "iwconfig wlan0 2>/dev/null",
+        "iwgetid": "iwgetid -r 2>/dev/null"
+    }
+    
+    for method, command in methods.items():
+        result = run_command(command)
+        debug_info[method] = {
+            "success": result["success"],
+            "stdout": result["stdout"][:500] if result["stdout"] else "",  # Limit output
+            "stderr": result["stderr"][:200] if result["stderr"] else "",   # Limit output
+            "returncode": result["returncode"]
+        }
+    
+    # Test interface existence
+    interface_check = run_command("ip link show | grep wlan0")
+    debug_info["interface_exists"] = interface_check["success"]
+    
+    return debug_info
 
 @app.get(
     "/wifi/networks",
