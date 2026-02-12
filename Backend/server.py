@@ -474,14 +474,25 @@ def get_current_connection_info() -> CurrentNetworkInfo:
 async def get_wifi_networks():
     """Get list of available WiFi networks"""
     try:
-        # Scan for networks
-        scan_result = run_command("sudo iwlist wlan0 scan | grep -E 'bssid|frequency|signal|flags|ssid'")
+        # Try multiple scanning methods
+        scan_result = None
+        
+        # Method 1: Try iwlist scan (may require sudo)
+        scan_result = run_command("iwlist wlan0 scan 2>/dev/null | grep -E 'bssid|frequency|signal|flags|ssid'")
+        
+        # Method 2: Try nmcli (NetworkManager)
+        if not scan_result["success"]:
+            scan_result = run_command("nmcli dev wifi list 2>/dev/null")
+        
+        # Method 3: Try wpa_cli scan
+        if not scan_result["success"]:
+            run_command("wpa_cli -i wlan0 scan 2>/dev/null")
+            time.sleep(2)  # Wait for scan to complete
+            scan_result = run_command("wpa_cli -i wlan0 scan_results 2>/dev/null")
         
         if not scan_result["success"]:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to scan WiFi networks"
-            )
+            # Return empty list if scanning fails
+            return NetworkListResponse(networks=[])
         
         networks = parse_wifi_scan(scan_result["stdout"])
         
@@ -490,10 +501,8 @@ async def get_wifi_networks():
         
         return NetworkListResponse(networks=networks)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get WiFi networks: {str(e)}"
-        )
+        # Return empty list on error instead of failing
+        return NetworkListResponse(networks=[])
 
 @app.get(
     "/wifi/status",

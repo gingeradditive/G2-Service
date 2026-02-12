@@ -198,12 +198,20 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=$SERVICE_NAME
 
+# Capabilities for WiFi operations
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+
 # Security
-NoNewPrivileges=true
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=$SERVICE_DIR
+
+# Allow network device access
+DeviceAllow=/dev/null rw
+DeviceAllow=netlink:route rw
 
 [Install]
 WantedBy=multi-user.target
