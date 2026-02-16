@@ -38,6 +38,26 @@ class NetworkManager:
     
     def __init__(self):
         self.nmcli_path = "/usr/bin/nmcli"
+        self.wifi_interface = "wlan1"  # Use wlan1 for network management
+    
+    def _check_wlan1_availability(self):
+        """Check if wlan1 interface is available"""
+        try:
+            # Check if wlan1 interface exists
+            result = subprocess.run(
+                ["ip", "link", "show", "wlan1"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    
+    def _validate_wlan1(self):
+        """Validate wlan1 is available, raise exception if not"""
+        if not self._check_wlan1_availability():
+            raise Exception("wlan1 interface not available. Please ensure wlan1 is properly configured.")
     
     def _run_command(self, command: List[str]) -> str:
         """Execute a shell command and return output"""
@@ -67,18 +87,21 @@ class NetworkManager:
         Returns:
             List of WiFiNetwork objects with network information
         """
-        logger.info("Starting WiFi network scan...")
-        
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
+            logger.info("Starting WiFi network scan...")
+            
             # Try nmcli first
             return self._get_networks_nmcli()
         except Exception as e:
-            logger.warning(f"nmcli failed: {str(e)}, trying fallback method")
+            logger.warning(f"wlan1 validation failed: {str(e)}, trying fallback method")
             try:
                 return self._get_networks_fallback()
             except Exception as e2:
                 logger.error(f"Fallback method also failed: {str(e2)}")
-                raise Exception(f"Failed to scan WiFi networks: nmcli error: {str(e)}, fallback error: {str(e2)}")
+                raise Exception(f"Failed to scan WiFi networks: wlan1 validation error: {str(e)}, fallback error: {str(e2)}")
     
     def _get_networks_nmcli(self) -> List[WiFiNetwork]:
         """Get networks using nmcli"""
@@ -233,6 +256,9 @@ class NetworkManager:
             Dictionary with WiFi adapter, IP and signal information
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             status_info = {
                 "adapter": {},
                 "ip": {},
@@ -266,8 +292,11 @@ class NetworkManager:
                 logger.warning(f"Failed to get device status: {str(e)}")
             
             # Get IP information using ip command
-            device_name = status_info.get("adapter", {}).get("device", "wlan0")
+            device_name = status_info.get("adapter", {}).get("device", self.wifi_interface)
             try:
+                # Validate wlan1 is available before proceeding
+                self._validate_wlan1()
+                
                 output = self._run_command(["ip", "addr", "show", device_name])
                 
                 ip_info = {"ipv4": None, "ipv6": None, "mac": None}
@@ -359,6 +388,9 @@ class NetworkManager:
             True if rescan was successful
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             self._run_command([
                 self.nmcli_path,
                 "device", "wifi", "rescan"
@@ -381,6 +413,9 @@ class NetworkManager:
             Dictionary with connection result
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             logger.info(f"Attempting to connect to WiFi network: {ssid}")
             
             # First check if network is available
@@ -435,7 +470,7 @@ class NetworkManager:
                             "connection", "add",
                             "type", "wifi",
                             "con-name", ssid,
-                            "ifname", "wlan0",
+                            "ifname", self.wifi_interface,
                             "ssid", ssid
                         ])
                         
@@ -510,6 +545,9 @@ class NetworkManager:
             Dictionary with disconnection result
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             logger.info("Attempting to disconnect from current WiFi network")
             
             # Get current connection
@@ -563,6 +601,9 @@ class NetworkManager:
             List of saved network configurations
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             logger.info("Getting saved WiFi networks...")
             
             # Get all connections
@@ -616,6 +657,9 @@ class NetworkManager:
             Dictionary with deletion result
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             logger.info(f"Deleting saved network: {ssid}")
             
             # Check if network exists
@@ -684,6 +728,9 @@ class NetworkManager:
             Dictionary with forget result
         """
         try:
+            # Validate wlan1 is available before proceeding
+            self._validate_wlan1()
+            
             logger.info(f"Forgetting network: {ssid}")
             
             # Use the same logic as delete_saved_network
