@@ -39,3 +39,4 @@ htmlcov/
 Configs/printer.cfg
 out/
 navi.json
+printer.cfg
