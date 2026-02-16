@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Complete WiFi Setup Script for USB Dongle
-# This script installs drivers and configures a new WiFi network on a Raspberry Pi USB WiFi dongle
+# Complete WiFi Setup Script for Access Point Mode
+# This script configures wlan0 as a WiFi Access Point (hotspot)
 
 # Banner
 echo "                                                        
@@ -17,7 +17,7 @@ echo "
 ~B@P!:. ..^J&&7                     :P@G7:.  .^7B@Y                             
   !P#######GJ:                        ~5B######BY^                              "
 echo
-echo "Complete WiFi Setup Script for USB Dongle"
+echo "Complete WiFi Setup Script for Access Point Mode"
 echo "Version 1.0 - By: Giacomo Guaresi"
 echo; echo
 
@@ -29,9 +29,10 @@ fi
 
 # Function to generate password from MAC address hash
 generate_password() {
-    # Get MAC address of wlan0 (same as used for SSID)
+    # Get MAC address of wlan0
     if ! ip link show wlan0 >/dev/null 2>&1; then
         echo "wlan0 interface not found. Cannot generate password from MAC address."
+        echo "Please ensure wlan0 is available before running this script."
         exit 1
     fi
     
@@ -81,159 +82,67 @@ generate_ssid() {
     echo "Based on wlan0 MAC: $mac_address"
 }
 
-# Function to install WiFi drivers
-install_wifi_drivers() {
-    echo "Step 1: Installing WiFi drivers..."
-    echo "=================================="
+# Function to install AP requirements
+install_ap_requirements() {
+    echo "Step 1: Installing Access Point requirements..."
+    echo "==========================================="
     
     # Update package list
     echo "Updating package list..."
     apt update
     
-    # Install common WiFi drivers and firmware for Raspberry Pi OS
-    echo "Installing common WiFi drivers and firmware..."
+    # Install AP software
+    echo "Installing hostapd, dnsmasq, and net-tools..."
     apt install -y \
-        firmware-linux-free \
-        firmware-linux-nonfree \
-        firmware-misc-nonfree \
-        firmware-realtek \
-        firmware-ralink \
-        firmware-atheros \
-        firmware-brcm80211 \
+        hostapd \
+        dnsmasq \
+        net-tools \
+        iptables \
         wireless-tools \
         wpasupplicant \
-        usbutils \
         raspberrypi-kernel
     
-    # Install additional driver packages available on Raspberry Pi
-    echo "Installing additional driver packages..."
-    # Try to install available driver packages, ignore if not found
-    apt install -y \
-        rtl8723-dkms \
-        8812au-dkms \
-        mt7601u-firmware \
-        2>/dev/null || echo "Some driver packages not available, continuing with built-in drivers..."
+    # Enable IP forwarding
+    echo "Enabling IP forwarding..."
+    sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+    sysctl -p
     
-    # Common WiFi modules to load
-    wifi_modules=(
-        "rtl8192cu"
-        "rtl8188eu"
-        "rtl8723bu"
-        "8812au"
-        "mt7601u"
-        "rt2800usb"
-        "rt73usb"
-        "ath9k_htc"
-        "carl9170"
-        "brcmfmac"
-    )
-    
-    echo "Loading WiFi kernel modules..."
-    for module in "${wifi_modules[@]}"; do
-        if modprobe "$module" 2>/dev/null; then
-            echo "Loaded module: $module"
-        else
-            echo "Module not available: $module"
-        fi
-    done
-    
-    # Trigger USB device rescan (with error handling)
-    echo "Rescanning USB devices..."
-    echo "1-1" > /sys/bus/usb/drivers/usb/unbind 2>/dev/null || echo "Cannot unbind USB device"
-    sleep 2
-    echo "1-1" > /sys/bus/usb/drivers/usb/bind 2>/dev/null || echo "Cannot bind USB device"
-    
-    # Alternative: reload USB drivers
-    echo "Reloading USB drivers..."
-    modprobe -r usbcore 2>/dev/null
-    modprobe usbcore 2>/dev/null
-    sleep 3
+    echo "AP requirements installed successfully!"
 }
 
-# Function to check USB devices
-check_usb_devices() {
-    echo "Step 0: Checking connected USB devices..."
-    echo "========================================"
-    
-    # SIMULATION MODE: Skip actual USB detection
-    echo "SIMULATION: Assuming WiFi dongle is connected"
-    echo "Connected USB devices:"
-    lsusb
-    echo
-    
-    echo "Checking for WiFi dongle vendors..."
-    echo "SIMULATION: Found potential WiFi dongle!"
-    return 0
-    
-    # ORIGINAL CODE (commented out for simulation):
-    # # List all USB devices
-    # echo "Connected USB devices:"
-    # lsusb
-    # echo
-    # 
-    # # Check for common WiFi dongle vendors
-    # echo "Checking for WiFi dongle vendors..."
-    # if lsusb | grep -i -E "(realtek|ralink|mediatek|atheros|broadcom|intel)"; then
-    #     echo "Found potential WiFi dongle!"
-    #     return 0
-    # else
-    #     echo "No recognized WiFi dongle vendor found."
-    #     echo "Showing all USB devices for manual inspection..."
-    #     lsusb
-    #     echo
-    #     echo "Common WiFi dongle vendors to look for:"
-    #     echo "- Realtek (0bda, 0bda)"
-    #     echo "- Ralink/MediaTek (148f, 0db0)"
-    #     echo "- Atheros (0cf3, 13d3)"
-    #     echo "- Broadcom (0a5c, 04b4)"
-    #     echo "- Intel (8087, 0955)"
-    #     echo
-    #     echo "If you have a WiFi dongle connected but it's not detected:"
-    #     echo "1. Try a different USB port"
-    #     echo "2. Check if the dongle is properly seated"
-    #     echo "3. Try a different WiFi dongle"
-    #     echo "4. The dongle may be unsupported"
-    #     return 1
-    # fi
-}
-
-# Function to check network interfaces
-check_network_interfaces() {
-    echo "Checking current network interfaces..."
-    echo "===================================="
+# Function to check wlan0 interface
+check_wlan0_interface() {
+    echo "Step 0: Checking wlan0 interface..."
+    echo "==================================="
     
     # Show current network interfaces
     echo "Current network interfaces:"
     ip link show | grep -E '^[0-9]+:' | awk '{print $2}' | sed 's/://g'
     
-    # SIMULATION MODE: Assume wlan1 exists
-    echo "SIMULATION: Assuming wlan1 interface is available"
-    echo "wlan1 interface found!"
-    echo "wlan1 details (simulated):"
-    echo "wlan1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DORMANT group default qlen 1000"
-    return 0
-    
-    # ORIGINAL CODE (commented out for simulation):
-    # # Check if wlan1 exists
-    # if ip link show wlan1 >/dev/null 2>&1; then
-    #     echo "wlan1 interface found!"
-    #     echo "wlan1 details:"
-    #     ip link show wlan1
-    #     return 0
-    # else
-    #     echo "wlan1 interface not found."
-    #     echo "This suggests the driver is not installed or the dongle is not recognized."
-    #     return 1
-    # fi
+    # Check if wlan0 exists
+    if ip link show wlan0 >/dev/null 2>&1; then
+        echo "wlan0 interface found!"
+        echo "wlan0 details:"
+        ip link show wlan0
+        return 0
+    else
+        echo "wlan0 interface not found."
+        echo "This suggests the WiFi adapter is not available."
+        echo "Please check:"
+        echo "1. WiFi adapter is properly connected"
+        echo "2. WiFi drivers are installed"
+        echo "3. The adapter is not disabled"
+        return 1
+    fi
 }
 
-# Function to configure WiFi network
-configure_wifi_network() {
-    echo "Step 2: Configuring WiFi network..."
-    echo "==================================="
+# Function to configure Access Point
+configure_access_point() {
+    echo "Step 2: Configuring Access Point on wlan0..."
+    echo "============================================"
     
     # Generate WiFi network configuration
-    echo "Generating WiFi network configuration..."
+    echo "Generating Access Point configuration..."
     
     # Generate unique SSID from wlan0 MAC address
     generate_ssid
@@ -245,268 +154,260 @@ configure_wifi_network() {
     country_code="IT"
     echo "Using country code: $country_code"
     
-    echo "Configuring WiFi network..."
+    # Configure static IP for wlan0 using NetworkManager
+    echo "Configuring static IP for wlan0..."
     
-    # SIMULATION MODE: Don't actually modify system files
-    echo "SIMULATION: Would backup /etc/wpa_supplicant/wpa_supplicant.conf"
-    echo "SIMULATION: Would add network configuration to wpa_supplicant.conf"
+    # Stop NetworkManager management of wlan0 temporarily
+    nmcli device set wlan0 managed no
     
-    # Generate network configuration (for display)
-    network_config=$(cat <<EOF
-network={
-    ssid="$ssid"
-    psk="$password"
-    key_mgmt=WPA-PSK
-    scan_ssid=1
-}
+    # Configure static IP using ip command
+    ip addr add 192.168.4.1/24 dev wlan0 2>/dev/null || echo "IP already configured or interface not ready"
+    
+    # Bring up wlan0 interface
+    ip link set wlan0 up
+    
+    echo "Static IP configured: 192.168.4.1/24"
+    
+    # Configure dnsmasq for DHCP
+    echo "Configuring dnsmasq for DHCP..."
+    
+    # Backup original dnsmasq.conf
+    if [ -f "/etc/dnsmasq.conf" ]; then
+        cp "/etc/dnsmasq.conf" "/etc/dnsmasq.conf.backup.$(date +%Y%m%d_%H%M%S)"
+    fi
+    
+    # Create dnsmasq configuration
+    cat > /etc/dnsmasq.conf <<EOF
+# DHCP configuration for wlan0 Access Point
+interface=wlan0
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+domain=local
+dhcp-option=option:dns-server,192.168.4.1
 EOF
-)
     
-    echo "Network configuration that would be added:"
-    echo "$network_config"
+    echo "DHCP server configured for range 192.168.4.2-192.168.4.20"
     
-    echo "SIMULATION: Would set country code in wpa_supplicant.conf"
-    echo "SIMULATION: Would restart networking services"
+    # Configure hostapd for Access Point
+    echo "Configuring hostapd for Access Point..."
     
-    # Simulate connection testing
-    echo "Waiting for WiFi connection..."
+    # Create hostapd configuration
+    cat > /etc/hostapd/hostapd.conf <<EOF
+# Access Point configuration
+interface=wlan0
+driver=nl80211
+ssid=$ssid
+hw_mode=g
+channel=6
+ieee80211n=1
+wmm_enabled=1
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase=$password
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+country_code=$country_code
+EOF
+    
+    echo "Access Point configuration created"
+    echo "SSID: $ssid"
+    echo "Password: $password"
+    echo "Channel: 6 (2.4GHz)"
+    
+    # Update hostapd default configuration
+    sed -i 's/#DAEMON_CONF=""/DAEMON_CONF="\/etc\/hostapd\/hostapd.conf"/' /etc/default/hostapd
+    
+    # Enable services
+    echo "Enabling and starting services..."
+    systemctl unmask hostapd
+    systemctl enable hostapd
+    systemctl enable dnsmasq
+    
+    # Restart networking services
+    echo "Restarting networking services..."
+    # Don't restart dhcpcd as it's not available, just ensure interface is up
+    systemctl restart NetworkManager 2>/dev/null || echo "NetworkManager restart not needed"
     sleep 3
     
-    # SIMULATION: Simulate successful connection
-    echo "SIMULATION: WiFi network '$ssid' configured successfully!"
+    # Start AP services
+    echo "Starting Access Point services..."
     
-    # Simulate IP address assignment
-    ip_address="192.168.4.1"
-    echo "IP Address: $ip_address"
+    # Kill any existing hostapd processes
+    pkill -f hostapd 2>/dev/null || true
+    sleep 2
     
-    echo "Configuration complete!"
-    echo "Network: $ssid"
-    echo "Interface: wlan1"
-    echo "Country: $country_code"
-    echo "Network Type: Hidden (SSID not broadcasted)"
-    
-    # Save credentials to file for reference
-    credentials_file="/home/pi/wifi_credentials.txt"
-    echo "WiFi Network Credentials" > "$credentials_file"
-    echo "========================" >> "$credentials_file"
-    echo "SSID: $ssid" >> "$credentials_file"
-    echo "Password: $password" >> "$credentials_file"
-    echo "Interface: wlan1" >> "$credentials_file"
-    echo "Country: $country_code" >> "$credentials_file"
-    echo "Network Type: Hidden (SSID not broadcasted)" >> "$credentials_file"
-    echo "Created: $(date)" >> "$credentials_file"
-    echo "Credentials saved to: $credentials_file"
-    
-    # Generate QR code for WiFi connection
-    echo "Generating WiFi QR code..."
-    qr_code_file="/home/pi/printer_data/config/wifi_qr.png"
-    
-    # Create directory if it doesn't exist
-    mkdir -p "$(dirname "$qr_code_file")"
-    
-    # Install required packages if not available
-    if ! command -v qrencode >/dev/null 2>&1; then
-        echo "Installing qrencode for QR code generation..."
-        apt update && apt install -y qrencode
+    # Start hostapd manually first to test
+    echo "Testing hostapd configuration..."
+    if hostapd -dd /etc/hostapd/hostapd.conf > /tmp/hostapd_debug.log 2>&1 & then
+        sleep 5
+        if pgrep -f hostapd > /dev/null; then
+            echo "Hostapd started successfully in debug mode"
+            kill $(pgrep -f hostapd) 2>/dev/null || true
+            sleep 2
+        else
+            echo "Hostapd failed to start, checking debug log..."
+            tail -20 /tmp/hostapd_debug.log
+            echo "Continuing with systemd service..."
+        fi
     fi
     
-    if ! command -v convert >/dev/null 2>&1; then
-        echo "Installing ImageMagick for image processing..."
-        apt update && apt install -y imagemagick
-    fi
+    # Start services via systemd
+    systemctl start hostapd
+    systemctl start dnsmasq
     
-    # Generate initial QR code (larger size for better quality)
-    temp_qr="/tmp/temp_qr.png"
-    wifi_string="WIFI:T:WPA;S:$ssid;P:$password;H:true;;"
-    if ! qrencode -o "$temp_qr" -s 10 "$wifi_string"; then
-        echo "Failed to generate QR code"
+    echo "Waiting for Access Point to start..."
+    sleep 15
+    
+    # Check if AP is running
+    if systemctl is-active --quiet hostapd && pgrep -f hostapd > /dev/null; then
+        echo "Access Point started successfully!"
+        echo "Network: $ssid"
+        echo "Password: $password"
+        echo "IP Address: 192.168.4.1"
+        echo "Interface: wlan0"
+        echo "Country: $country_code"
+        echo "Network Type: Hidden (SSID not broadcasted)"
+        
+        # Save credentials to file for reference
+        credentials_file="/home/pi/ap_credentials.txt"
+        echo "Access Point Credentials" > "$credentials_file"
+        echo "======================" >> "$credentials_file"
+        echo "SSID: $ssid" >> "$credentials_file"
+        echo "Password: $password" >> "$credentials_file"
+        echo "IP Address: 192.168.4.1" >> "$credentials_file"
+        echo "Interface: wlan0" >> "$credentials_file"
+        echo "Country: $country_code" >> "$credentials_file"
+        echo "Network Type: Hidden (SSID not broadcasted)" >> "$credentials_file"
+        echo "Created: $(date)" >> "$credentials_file"
+        echo "Credentials saved to: $credentials_file"
+        
+        # Generate QR code for WiFi connection
+        echo "Generating WiFi QR code..."
+        qr_code_file="/home/pi/printer_data/config/ap_qr.png"
+        
+        # Create directory if it doesn't exist
+        mkdir -p "$(dirname "$qr_code_file")"
+        
+        # Install required packages if not available
+        if ! command -v qrencode >/dev/null 2>&1; then
+            echo "Installing qrencode for QR code generation..."
+            apt update && apt install -y qrencode
+        fi
+        
+        if ! command -v convert >/dev/null 2>&1; then
+            echo "Installing ImageMagick for image processing..."
+            apt update && apt install -y imagemagick
+        fi
+        
+        # Generate initial QR code (larger size for better quality)
+        temp_qr="/tmp/temp_ap_qr.png"
+        wifi_string="WIFI:T:WPA;S:$ssid;P:$password;H:true;;"
+        if ! qrencode -o "$temp_qr" -s 10 "$wifi_string"; then
+            echo "Failed to generate QR code"
+            return 1
+        fi
+        
+        # Create final image with text and decorations
+        convert "$temp_qr" \
+            -bordercolor white -border 50 \
+            -gravity north \
+            -background white \
+            -splice 0x80 \
+            -font DejaVu-Sans-Bold \
+            -pointsize 24 \
+            -fill black \
+            -annotate +0+20 "SSID: $ssid" \
+            -font DejaVu-Sans \
+            -pointsize 18 \
+            -fill "#333333" \
+            -annotate +0+50 "Password: $password" \
+            -gravity south \
+            -background white \
+            -splice 0x40 \
+            -font DejaVu-Sans \
+            -pointsize 14 \
+            -fill "#666666" \
+            -annotate +0+15 "Access Point - Scan to Connect" \
+            "$qr_code_file"
+        
+        # Clean up temporary file
+        rm -f "$temp_qr"
+        
+        if [ -f "$qr_code_file" ]; then
+            echo "Access Point QR code generated: $qr_code_file"
+            echo "QR code includes SSID and password text"
+            echo "Scan this QR code to connect to the Access Point automatically"
+            echo "Note: This is a hidden network - SSID is not broadcasted"
+        else
+            echo "Failed to generate final QR code image"
+        fi
+        
+        return 0
+    else
+        echo "Failed to start Access Point"
+        echo "Please check the hostapd service status:"
+        systemctl status hostapd
+        echo ""
+        echo "Checking hostapd configuration:"
+        echo "Interface: $(grep '^interface=' /etc/hostapd/hostapd.conf)"
+        echo "Driver: $(grep '^driver=' /etc/hostapd/hostapd.conf)"
+        echo "SSID: $(grep '^ssid=' /etc/hostapd/hostapd.conf)"
+        echo "Channel: $(grep '^channel=' /etc/hostapd/hostapd.conf)"
+        echo "HW Mode: $(grep '^hw_mode=' /etc/hostapd/hostapd.conf)"
+        echo ""
+        echo "Checking wlan0 interface status:"
+        ip link show wlan0
+        echo ""
+        echo "Checking if wlan0 is up:"
+        ip addr show wlan0
+        echo ""
+        echo "Debug log (last 20 lines):"
+        tail -20 /tmp/hostapd_debug.log 2>/dev/null || echo "No debug log found"
         return 1
     fi
-    
-    # Create final image with text and decorations
-    # Add white border and text overlay
-    convert "$temp_qr" \
-        -bordercolor white -border 50 \
-        -gravity north \
-        -background white \
-        -splice 0x80 \
-        -font DejaVu-Sans-Bold \
-        -pointsize 24 \
-        -fill black \
-        -annotate +0+20 "SSID: $ssid" \
-        -font DejaVu-Sans \
-        -pointsize 18 \
-        -fill "#333333" \
-        -annotate +0+50 "Password: $password" \
-        -gravity south \
-        -background white \
-        -splice 0x40 \
-        -font DejaVu-Sans \
-        -pointsize 14 \
-        -fill "#666666" \
-        -annotate +0+15 "Hidden Network - Scan to Connect" \
-        "$qr_code_file"
-    
-    # Clean up temporary file
-    rm -f "$temp_qr"
-    
-    if [ -f "$qr_code_file" ]; then
-        echo "WiFi QR code generated: $qr_code_file"
-        echo "QR code includes SSID and password text"
-        echo "Scan this QR code to connect to the hidden WiFi network automatically"
-        echo "Note: This is a hidden network - SSID is not broadcasted"
-    else
-        echo "Failed to generate final QR code image"
-    fi
-    
+}
+
+# Function to configure WiFi network (legacy - not used in AP mode)
+configure_wifi_network() {
+    echo "This function is deprecated in AP mode. Use configure_access_point() instead."
     return 0
-    
-    # ORIGINAL CODE (commented out for simulation):
-    # # Backup existing wpa_supplicant.conf
-    # if [ -f "/etc/wpa_supplicant/wpa_supplicant.conf" ]; then
-    #     cp "/etc/wpa_supplicant/wpa_supplicant.conf" "/etc/wpa_supplicant/wpa_supplicant.conf.backup.$(date +%Y%m%d_%H%M%S)"
-    #     echo "Backup of existing configuration created"
-    # fi
-    # 
-    # # Generate network configuration
-    # network_config=$(cat <<EOF
-    # network={
-    #     ssid="$ssid"
-    #     psk="$password"
-    #     key_mgmt=WPA-PSK
-    # }
-    # EOF
-    # )
-    # 
-    # # Add network to wpa_supplicant.conf
-    # echo "$network_config" >> "/etc/wpa_supplicant/wpa_supplicant.conf"
-    # 
-    # # Set country code in wpa_supplicant.conf
-    # sed -i "s/country=.*/country=$country_code/" "/etc/wpa_supplicant/wpa_supplicant.conf"
-    # if ! grep -q "country=" "/etc/wpa_supplicant/wpa_supplicant.conf"; then
-    #     sed -i "1i country=$country_code" "/etc/wpa_supplicant/wpa_supplicant.conf"
-    # fi
-    # 
-    # # Restart networking services
-    # echo "Restarting networking services..."
-    # 
-    # # Bring down wlan1
-    # ip link set wlan1 down
-    # 
-    # # Restart wpa_supplicant
-    # systemctl restart wpa_supplicant
-    # 
-    # # Bring up wlan1
-    # ip link set wlan1 up
-    # 
-    # echo "Waiting for WiFi connection..."
-    # sleep 10
-    # 
-    # # Check connection status
-    # if iwconfig wlan1 | grep -q "ESSID:\"$ssid\""; then
-    #     echo "WiFi network '$ssid' configured successfully!"
-    #     
-    #     # Get IP address
-    #     ip_address=$(ip addr show wlan1 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
-    #     if [ -n "$ip_address" ]; then
-    #         echo "IP Address: $ip_address"
-    #     else
-    #         echo "Waiting for IP address assignment..."
-    #         sleep 5
-    #         ip_address=$(ip addr show wlan1 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
-    #         if [ -n "$ip_address" ]; then
-    #             echo "IP Address: $ip_address"
-    #         else
-    #             echo "No IP address assigned yet. This may take a few moments."
-    #         fi
-    #     fi
-    #     
-    #     echo "Configuration complete!"
-    #     echo "Network: $ssid"
-    #     echo "Interface: wlan1"
-    #     echo "Country: $country_code"
-    #     
-    #     # Save credentials to file for reference
-    #     credentials_file="/home/pi/wifi_credentials.txt"
-    #     echo "WiFi Network Credentials" > "$credentials_file"
-    #     echo "========================" >> "$credentials_file"
-    #     echo "SSID: $ssid" >> "$credentials_file"
-    #     echo "Password: $password" >> "$credentials_file"
-    #     echo "Interface: wlan1" >> "$credentials_file"
-    #     echo "Country: $country_code" >> "$credentials_file"
-    #     echo "Created: $(date)" >> "$credentials_file"
-    #     echo "Credentials saved to: $credentials_file"
-    #     
-    #     return 0
-    # else
-    #     echo "Failed to connect to WiFi network '$ssid'"
-    #     echo "Please check:"
-    #     echo "1. WiFi network name and password"
-    #     echo "2. USB dongle connection"
-    #     echo "3. Network availability"
-    #     echo "You can check connection status with: iwconfig wlan1"
-    #     return 1
-    # fi
 }
 
 # Main execution flow
 main() {
-    echo "Starting complete WiFi setup process..."
-    echo "====================================="
+    echo "Starting Access Point setup process..."
+    echo "======================================"
     echo
     
-    # Step 0: Check USB devices
-    if ! check_usb_devices; then
+    # Step 0: Check wlan0 interface
+    if ! check_wlan0_interface; then
         echo
-        echo "No WiFi dongle detected. Exiting."
-        echo "Please connect a WiFi dongle and try again."
+        echo "wlan0 interface not available. Exiting."
+        echo "Please ensure wlan0 is available before running this script."
         exit 1
     fi
     
-    # Step 1: Check initial network interfaces
-    if ! check_network_interfaces; then
-        echo "wlan1 not found. Installing drivers..."
-        echo
-        
-        # Install drivers if wlan1 is not found
-        install_wifi_drivers
-        
-        echo
-        echo "Checking network interfaces after driver installation..."
-        
-        # Check again after driver installation
-        if ! check_network_interfaces; then
-            echo "wlan1 interface still not found after driver installation."
-            echo "Troubleshooting steps:"
-            echo "1. Check if the dongle is properly connected"
-            echo "2. Try a different USB port"
-            echo "3. Reboot the system and try again"
-            echo "4. Check dongle compatibility with Raspberry Pi"
-            echo
-            echo "Manual driver installation may be required."
-            echo "Please provide the dongle's vendor and model for specific driver installation."
-            echo
-            echo "System information:"
-            echo "Kernel version:"
-            uname -r
-            echo "Available WiFi modules:"
-            find /lib/modules/$(uname -r) -name "*wifi*" -o -name "*rtl*" -o -name "*ralink*" -o -name "*mediatek*" | head -10
-            echo "USB devices after driver installation:"
-            lsusb | grep -i -E "(realtek|ralink|mediatek|atheros|broadcom|intel|wireless|wifi)" || echo "No WiFi-related USB devices found"
-            exit 1
-        fi
-    fi
+    # Step 1: Install AP requirements
+    install_ap_requirements
     
     echo
-    # Step 2: Configure WiFi network
-    if configure_wifi_network; then
+    # Step 2: Configure Access Point
+    if configure_access_point; then
         echo
-        echo "Script completed successfully!"
-        echo "USB WiFi dongle is configured and ready to use."
-        echo "Network credentials have been saved to /home/pi/wifi_credentials.txt"
+        echo "Access Point setup completed successfully!"
+        echo "wlan0 is now configured as an Access Point (hotspot)."
+        echo "Network credentials have been saved to /home/pi/ap_credentials.txt"
+        echo
+        echo "To test the Access Point:"
+        echo "1. Connect a device to the network '$ssid'"
+        echo "2. Use the password: $password"
+        echo "3. You should get an IP address in the range 192.168.4.2-192.168.4.20"
+        echo "4. Test connectivity by pinging 192.168.4.1"
     else
         echo
-        echo "WiFi configuration failed. Please check the error messages above."
+        echo "Access Point configuration failed. Please check the error messages above."
         exit 1
     fi
 }
