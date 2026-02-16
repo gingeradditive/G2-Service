@@ -2,7 +2,8 @@
 
 # Install script for G2-Service FastAPI client on Raspberry Pi
 # This script installs the FastAPI client in production mode,
-# runs WiFi setup, and creates the Configs symbolic link
+# installs first-boot WiFi setup service, and creates the Configs symbolic link
+# WiFi setup runs automatically on first boot when interfaces are available
 
 set -e  # Exit on any error
 
@@ -50,14 +51,16 @@ sudo systemctl daemon-reload
 sudo systemctl enable g2-service
 sudo systemctl start g2-service
 
-# Run WiFi setup script
-echo "Running WiFi setup script..."
-if [ -f "Scripts/setup_wifi_complete.sh" ]; then
-    chmod +x Scripts/setup_wifi_complete.sh
-    sudo Scripts/setup_wifi_complete.sh
-else
-    echo "Warning: setup_wifi_complete.sh not found in Scripts/ directory"
-fi
+# Install first-boot service for WiFi setup
+echo "Installing first-boot WiFi setup service..."
+sudo cp Scripts/g2-service-first-boot.service /etc/systemd/system/
+sudo chmod 644 /etc/systemd/system/g2-service-first-boot.service
+sudo systemctl daemon-reload
+sudo systemctl enable g2-service-first-boot.service
+echo "First-boot WiFi service installed - will run on next boot when interfaces are available"
+
+# WiFi setup will be handled by first-boot service
+echo "WiFi setup will be configured at first boot when interfaces are available"
 
 # Create printer_data config directory if it doesn't exist
 echo "Creating printer_data config directory..."

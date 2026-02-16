@@ -1,0 +1,17 @@
+[Unit]
+Description=G2-Service First Boot WiFi Setup
+After=network.target
+ConditionPathExists=!/etc/g2-service/first-boot-completed
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+WorkingDirectory=/home/pi/G2-Service
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/pi/G2-Service/Scripts/first-boot-wifi-setup.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
