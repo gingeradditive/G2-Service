@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Complete WiFi Setup Script for Access Point Mode
-# This script configures wlan0 as a WiFi Access Point (hotspot)
+# Complete WiFi Setup Script for Access Point Mode - Refactored Version
+# This script configures wlan0 as a WiFi Access Point (hotspot) with proper local services access
 
 # Banner
 echo "                                                        
@@ -17,9 +17,29 @@ echo "
 ~B@P!:. ..^J&&7                     :P@G7:.  .^7B@Y                             
   !P#######GJ:                        ~5B######BY^                              "
 echo
-echo "Complete WiFi Setup Script for Access Point Mode"
-echo "Version 1.0 - By: Giacomo Guaresi"
+echo "Complete WiFi Setup Script for Access Point Mode - REFACTORED"
+echo "Version 2.0 - By: Giacomo Guaresi"
+echo "Fixed: Local services access, proper routing, DNS resolution"
 echo; echo
+
+# Global variables
+LOG_FILE="/var/log/wifi_setup.log"
+CREDENTIALS_FILE="/home/pi/ap_credentials.txt"
+AP_INTERFACE="wlan0"
+AP_IP="192.168.4.1"
+AP_NETMASK="255.255.255.0"
+AP_NETWORK="192.168.4.0/24"
+
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling function
+error_exit() {
+    log "ERROR: $1"
+    exit 1
+}
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
@@ -29,176 +49,268 @@ fi
 
 # Function to generate password from MAC address hash
 generate_password() {
-    # Get MAC address of wlan0
-    if ! ip link show wlan0 >/dev/null 2>&1; then
-        echo "wlan0 interface not found. Cannot generate password from MAC address."
-        echo "Please ensure wlan0 is available before running this script."
-        exit 1
+    log "Generating password from MAC address..."
+    
+    if ! ip link show "$AP_INTERFACE" >/dev/null 2>&1; then
+        error_exit "$AP_INTERFACE interface not found. Cannot generate password from MAC address."
     fi
     
-    mac_address=$(ip link show wlan0 | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)
+    mac_address=$(ip link show "$AP_INTERFACE" | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)
     if [ -z "$mac_address" ]; then
-        echo "Could not retrieve MAC address from wlan0"
-        exit 1
+        error_exit "Could not retrieve MAC address from $AP_INTERFACE"
     fi
     
-    # Remove colons and convert to lowercase
     mac_clean=$(echo "$mac_address" | tr -d ':' | tr '[:upper:]' '[:lower:]')
-    
-    # Generate SHA256 hash of MAC address
     mac_hash=$(echo -n "$mac_clean" | sha256sum | cut -d' ' -f1)
-    
-    # Take first 16 characters of hash and add G2 prefix
     password="G2${mac_hash:0:16}"
     
-    echo "Generated password from MAC hash: $password"
-    echo "Based on wlan0 MAC: $mac_address"
+    log "Generated password: $password"
+    log "Based on $AP_INTERFACE MAC: $mac_address"
+    # Return password without echoing it
+    echo "$password"
 }
 
 # Function to generate unique SSID from wlan0 MAC address
 generate_ssid() {
-    # Check if wlan0 exists
-    if ! ip link show wlan0 >/dev/null 2>&1; then
-        echo "wlan0 interface not found. Cannot generate unique SSID."
-        echo "Available interfaces:"
-        ip link show | grep -E '^[0-9]+:' | awk '{print $2}' | sed 's/://g'
-        exit 1
+    log "Generating unique SSID from MAC address..."
+    
+    if ! ip link show "$AP_INTERFACE" >/dev/null 2>&1; then
+        error_exit "$AP_INTERFACE interface not found. Cannot generate unique SSID."
     fi
     
-    # Get MAC address of wlan0 and extract last 6 characters
-    mac_address=$(ip link show wlan0 | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)
+    mac_address=$(ip link show "$AP_INTERFACE" | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)
     if [ -z "$mac_address" ]; then
-        echo "Could not retrieve MAC address from wlan0"
-        exit 1
+        error_exit "Could not retrieve MAC address from $AP_INTERFACE"
     fi
     
-    # Remove colons and get last 6 characters
     mac_clean=$(echo "$mac_address" | tr -d ':')
     last_six=${mac_clean: -6}
-    
-    # Generate SSID
     ssid="G2TabletNetwork-$last_six"
-    echo "Generated unique SSID: $ssid"
-    echo "Based on wlan0 MAC: $mac_address"
+    
+    log "Generated SSID: $ssid"
+    log "Based on $AP_INTERFACE MAC: $mac_address"
+    # Return SSID without echoing it
+    echo "$ssid"
 }
 
 # Function to install AP requirements
 install_ap_requirements() {
-    echo "Step 1: Installing Access Point requirements..."
-    echo "==========================================="
+    log "Step 1: Installing Access Point requirements..."
     
     # Update package list
-    echo "Updating package list..."
-    apt update
+    log "Updating package list..."
+    apt update || error_exit "Failed to update package list"
     
     # Install AP software
-    echo "Installing hostapd, dnsmasq, and net-tools..."
+    log "Installing required packages..."
+    
+    # Install core packages first
     apt install -y \
         hostapd \
         dnsmasq \
         net-tools \
         iptables \
         wireless-tools \
-        wpasupplicant \
-        raspberrypi-kernel
+        wpasupplicant || error_exit "Failed to install core packages"
+    
+    # Install optional packages that might not be available
+    log "Installing optional packages..."
+    apt install -y haveged 2>/dev/null || log "haveged not available, skipping"
+    
+    # Verify core packages are installed
+    for package in hostapd dnsmasq net-tools iptables; do
+        if ! dpkg -l | grep -q "^ii.*$package "; then
+            error_exit "Required package $package not installed"
+        fi
+    done
+    
+    log "✓ All required packages installed successfully"
     
     # Enable IP forwarding
-    echo "Enabling IP forwarding..."
+    log "Enabling IP forwarding..."
     sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
-    sysctl -p
+    sysctl -p || error_exit "Failed to enable IP forwarding"
     
-    echo "AP requirements installed successfully!"
+    # Configure nginx for gzip compression (if available)
+    if command -v nginx >/dev/null 2>&1; then
+        log "Configuring nginx for gzip compression..."
+        cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+        
+        # Enable gzip compression
+        sed -i 's/# gzip_vary on;/gzip_vary on;/' /etc/nginx/nginx.conf
+        sed -i 's/# gzip_proxied any;/gzip_proxied any;/' /etc/nginx/nginx.conf
+        sed -i 's/# gzip_comp_level 6;/gzip_comp_level 9;/' /etc/nginx/nginx.conf
+        sed -i 's/# gzip_buffers 16 8k;/gzip_buffers 16 8k;/' /etc/nginx/nginx.conf
+        sed -i 's/# gzip_http_version 1.1;/gzip_http_version 1.1;/' /etc/nginx/nginx.conf
+        sed -i 's/# gzip_types text\/plain text\/css application\/json application\/javascript text\/xml application\/xml application\/xml\+rss text\/javascript;/gzip_types text\/plain text\/css application\/json application\/javascript text\/xml application\/xml application\/xml\+rss text\/javascript;/' /etc/nginx/nginx.conf
+        
+        if nginx -t; then
+            systemctl reload nginx
+            log "✓ nginx gzip compression enabled"
+        else
+            log "❌ nginx configuration error, restoring backup"
+            cp /etc/nginx/nginx.conf.backup /etc/nginx/nginx.conf
+        fi
+    else
+        log "nginx not found, skipping gzip configuration"
+    fi
+    
+    log "✓ AP requirements installed successfully!"
 }
 
-# Function to check wlan0 interface
-check_wlan0_interface() {
-    echo "Step 0: Checking wlan0 interface..."
-    echo "==================================="
+# Function to check and prepare wlan0 interface
+prepare_wlan0_interface() {
+    log "Step 0: Preparing $AP_INTERFACE interface..."
     
     # Show current network interfaces
-    echo "Current network interfaces:"
-    ip link show | grep -E '^[0-9]+:' | awk '{print $2}' | sed 's/://g'
+    log "Current network interfaces:"
+    ip link show | grep -E '^[0-9]+:' | awk '{print $2}' | sed 's/://g' | tee -a "$LOG_FILE"
     
-    # Check if wlan0 exists
-    if ip link show wlan0 >/dev/null 2>&1; then
-        echo "wlan0 interface found!"
-        echo "wlan0 details:"
-        ip link show wlan0
-        return 0
-    else
-        echo "wlan0 interface not found."
-        echo "This suggests the WiFi adapter is not available."
-        echo "Please check:"
-        echo "1. WiFi adapter is properly connected"
-        echo "2. WiFi drivers are installed"
-        echo "3. The adapter is not disabled"
-        return 1
+    if ! ip link show "$AP_INTERFACE" >/dev/null 2>&1; then
+        error_exit "$AP_INTERFACE interface not found. Please check WiFi adapter connection and drivers."
     fi
+    
+    log "$AP_INTERFACE interface found!"
+    log "$AP_INTERFACE details:"
+    ip link show "$AP_INTERFACE" | tee -a "$LOG_FILE"
+    
+    # Stop and disable conflicting services
+    log "Stopping conflicting services..."
+    systemctl stop wpa_supplicant 2>/dev/null || true
+    systemctl stop hostapd 2>/dev/null || true
+    systemctl stop dnsmasq 2>/dev/null || true
+    
+    # Kill any remaining processes
+    pkill -f wpa_supplicant 2>/dev/null || true
+    pkill -f hostapd 2>/dev/null || true
+    pkill -f dnsmasq 2>/dev/null || true
+    
+    # Remove NetworkManager management of wlan0
+    if command -v nmcli >/dev/null 2>&1; then
+        log "Removing NetworkManager management of $AP_INTERFACE..."
+        nmcli device set "$AP_INTERFACE" managed no 2>/dev/null || true
+        systemctl restart NetworkManager 2>/dev/null || true
+    fi
+    
+    # Wait for processes to stop
+    sleep 3
+    
+    log "✓ $AP_INTERFACE interface prepared"
 }
 
-# Function to configure Access Point
-configure_access_point() {
-    echo "Step 2: Configuring Access Point on wlan0..."
-    echo "============================================"
+# Function to configure network interface
+configure_network_interface() {
+    log "Step 2: Configuring network interface..."
     
-    # Generate WiFi network configuration
-    echo "Generating Access Point configuration..."
+    # Flush existing IP addresses
+    log "Flushing existing IP addresses from $AP_INTERFACE..."
+    ip addr flush dev "$AP_INTERFACE" 2>/dev/null || true
     
-    # Generate unique SSID from wlan0 MAC address
-    generate_ssid
+    # Set interface up
+    log "Bringing $AP_INTERFACE up..."
+    ip link set "$AP_INTERFACE" up || error_exit "Failed to bring $AP_INTERFACE up"
     
-    # Generate secure password automatically
-    generate_password
+    # Configure static IP
+    log "Configuring static IP: $AP_IP/$AP_NETMASK"
+    ip addr add "$AP_IP/$AP_NETMASK" dev "$AP_INTERFACE" || error_exit "Failed to configure static IP"
     
-    # Set default country code
-    country_code="IT"
-    echo "Using country code: $country_code"
+    # Optimize network interface for performance
+    log "Optimizing network interface performance..."
     
-    # Configure static IP for wlan0 using NetworkManager
-    echo "Configuring static IP for wlan0..."
+    # Disable IPv6 on AP interface to reduce overhead
+    sysctl -w net.ipv6.conf."$AP_INTERFACE".disable_ipv6=1 2>/dev/null || true
     
-    # Stop NetworkManager management of wlan0 temporarily
-    nmcli device set wlan0 managed no
+    # Optimize TCP settings for local network
+    sysctl -w net.core.rmem_max=16777216 2>/dev/null || true
+    sysctl -w net.core.wmem_max=16777216 2>/dev/null || true
+    sysctl -w net.ipv4.tcp_rmem="4096 87380 16777216" 2>/dev/null || true
+    sysctl -w net.ipv4.tcp_wmem="4096 65536 16777216" 2>/dev/null || true
     
-    # Configure static IP using ip command
-    ip addr add 192.168.4.1/24 dev wlan0 2>/dev/null || echo "IP already configured or interface not ready"
+    # Verify IP configuration
+    if ip addr show "$AP_INTERFACE" | grep -q "$AP_IP"; then
+        log "✓ Static IP configured successfully: $AP_IP"
+    else
+        error_exit "Failed to verify static IP configuration"
+    fi
     
-    # Bring up wlan0 interface
-    ip link set wlan0 up
+    # Wait for interface to stabilize
+    sleep 2
+}
+
+# Function to configure dnsmasq
+configure_dnsmasq() {
+    log "Step 3: Configuring dnsmasq for DHCP and DNS..."
     
-    echo "Static IP configured: 192.168.4.1/24"
-    
-    # Configure dnsmasq for DHCP
-    echo "Configuring dnsmasq for DHCP..."
-    
-    # Backup original dnsmasq.conf
+    # Backup original configuration
     if [ -f "/etc/dnsmasq.conf" ]; then
         cp "/etc/dnsmasq.conf" "/etc/dnsmasq.conf.backup.$(date +%Y%m%d_%H%M%S)"
     fi
     
-    # Create dnsmasq configuration
+    # Create optimized dnsmasq configuration
     cat > /etc/dnsmasq.conf <<EOF
-# DHCP configuration for wlan0 Access Point
-interface=wlan0
-dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+# DHCP and DNS configuration for $AP_INTERFACE Access Point
+interface=$AP_INTERFACE
 domain=local
-dhcp-option=option:dns-server,192.168.4.1
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,12h
+dhcp-option=6,$AP_IP
+dhcp-option=3,$AP_IP
+dhcp-option=1,$AP_NETMASK
+dhcp-option=28,192.168.4.255
+dhcp-leasefile=/var/lib/misc/dnsmasq.leases
+dhcp-authoritative
+listen-address=$AP_IP
+bind-interfaces
+no-resolv
+# Use local DNS only for faster resolution
+server=127.0.0.1
+cache-size=1000
+log-queries
+log-dhcp
+
+# Local DNS entries for services (priority resolution)
+address=/mainsail.local/$AP_IP
+address=/api.local/$AP_IP
+address=/klipper.local/$AP_IP
+address=/printer.local/$AP_IP
+address=/g2.local/$AP_IP
+
+# Block external DNS queries to prevent slowdown
+server=/#/127.0.0.1
 EOF
     
-    echo "DHCP server configured for range 192.168.4.2-192.168.4.20"
+    # Create leases directory
+    mkdir -p /var/lib/misc
+    touch /var/lib/misc/dnsmasq.leases
+    chmod 644 /var/lib/misc/dnsmasq.leases
     
-    # Configure hostapd for Access Point
-    echo "Configuring hostapd for Access Point..."
+    log "✓ dnsmasq configuration created"
+    log "DHCP range: 192.168.4.2-192.168.4.20"
+    log "DNS server: $AP_IP"
+}
+
+# Function to configure hostapd
+configure_hostapd() {
+    log "Step 4: Configuring hostapd for Access Point..."
+    
+    # Generate SSID and password (capture output without logs)
+    log "Generating network credentials..."
+    ssid=$(generate_ssid | tail -1)
+    password=$(generate_password | tail -1)
+    country_code="IT"
+    
+    log "Generated credentials - SSID: $ssid, Password: [HIDDEN]"
     
     # Create hostapd configuration
     cat > /etc/hostapd/hostapd.conf <<EOF
-# Access Point configuration
-interface=wlan0
+# Access Point configuration for $AP_INTERFACE
+interface=$AP_INTERFACE
 driver=nl80211
 ssid=$ssid
 hw_mode=g
 channel=6
 ieee80211n=1
+ieee80211ac=1
+ieee80211ax=0
 wmm_enabled=1
 macaddr_acl=0
 auth_algs=1
@@ -209,107 +321,432 @@ wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 country_code=$country_code
+ieee80211h=0
+ieee80211d=1
+
+# Performance optimizations
+beacon_int=100
+dtim_period=1
+max_num_sta=8
+rts_threshold=2347
+fragm_threshold=2346
+
+# Logging
+logger_syslog=-1
+logger_syslog_level=2
 EOF
-    
-    echo "Access Point configuration created"
-    echo "SSID: $ssid"
-    echo "Password: $password"
-    echo "Channel: 6 (2.4GHz)"
     
     # Update hostapd default configuration
     sed -i 's/#DAEMON_CONF=""/DAEMON_CONF="\/etc\/hostapd\/hostapd.conf"/' /etc/default/hostapd
     
+    log "✓ hostapd configuration created"
+    log "SSID: $ssid"
+    log "Password: $password"
+    log "Channel: 6 (2.4GHz)"
+    log "Country: $country_code"
+    
+    # Save credentials
+    save_credentials "$ssid" "$password"
+}
+
+# Function to save credentials
+save_credentials() {
+    local ssid="$1"
+    local password="$2"
+    
+    log "Saving credentials to $CREDENTIALS_FILE..."
+    mkdir -p "$(dirname "$CREDENTIALS_FILE")"
+    
+    cat > "$CREDENTIALS_FILE" <<EOF
+Access Point Credentials
+======================
+SSID: $ssid
+Password: $password
+IP Address: $AP_IP
+Interface: $AP_INTERFACE
+Country: IT
+Network Type: Hidden (SSID not broadcasted)
+Created: $(date)
+
+Local Services:
+- Swagger API (Online): http://$AP_IP:8000/docs
+- API Documentation (Offline): http://$AP_IP:8000/docs-offline
+- Main Service: http://$AP_IP:8000
+- Mainsail: http://$AP_IP
+- DNS Names: mainsail.local, api.local, g2.local
+EOF
+    
+    log "✓ Credentials saved to: $CREDENTIALS_FILE"
+}
+
+# Function to optimize DNS configuration
+optimize_dns_resolution() {
+    log "Optimizing DNS resolution for local services..."
+    
+    # Configure system to use local DNS first
+    log "Configuring system DNS to use local server..."
+    
+    # Backup original resolv.conf
+    cp /etc/resolv.conf /etc/resolv.conf.backup.$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+    
+    # Create optimized resolv.conf for local services
+    cat > /etc/resolv.conf <<EOF
+# Local DNS configuration for Access Point
+nameserver $AP_IP
+nameserver 127.0.0.1
+# Fallback DNS (only if local fails)
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+options timeout:2 attempts:2 rotate
+EOF
+    
+    # Prevent NetworkManager from overwriting resolv.conf
+    log "Protecting DNS configuration from NetworkManager..."
+    
+    # Create NetworkManager configuration to preserve our DNS
+    mkdir -p /etc/NetworkManager/conf.d
+    cat > /etc/NetworkManager/conf.d/dns.conf <<EOF
+[main]
+dns=none
+EOF
+    
+    # Restart NetworkManager to apply DNS settings
+    systemctl restart NetworkManager 2>/dev/null || true
+    
+    # Add local entries to /etc/hosts for instant resolution
+    log "Adding local service entries to hosts file..."
+    cp /etc/hosts /etc/hosts.backup.$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+    
+    # Add local entries to hosts file (bypass DNS completely)
+    cat >> /etc/hosts <<EOF
+
+# Local Access Point services - instant resolution
+$AP_IP mainsail.local api.local g2.local klipper.local printer.local
+$AP_IP mainsail api g2 klipper printer
+127.0.0.1 localhost
+EOF
+    
+    log "✓ DNS optimization completed"
+    log "Local services will now resolve instantly"
+}
+
+# Function to configure firewall for local services
+configure_firewall() {
+    log "Step 5: Configuring firewall for local services access..."
+    
+    # Get the main network interface (if exists)
+    MAIN_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
+    log "Main network interface: ${MAIN_INTERFACE:-'None'}"
+    
+    # Clear existing rules
+    log "Clearing existing firewall rules..."
+    iptables -t nat -F 2>/dev/null || true
+    iptables -t nat -X 2>/dev/null || true
+    iptables -F 2>/dev/null || true
+    iptables -X 2>/dev/null || true
+    
+    # Set default policies
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    
+    # Allow loopback traffic
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
+    
+    # Allow established and related connections
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+    
+    # Allow ALL traffic from/to AP interface (critical for local services)
+    iptables -A INPUT -i "$AP_INTERFACE" -j ACCEPT
+    iptables -A OUTPUT -o "$AP_INTERFACE" -j ACCEPT
+    iptables -A FORWARD -i "$AP_INTERFACE" -j ACCEPT
+    iptables -A FORWARD -o "$AP_INTERFACE" -j ACCEPT
+    
+    # Allow specific local services (redundant but explicit)
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 22 -j ACCEPT   # SSH
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 53 -j ACCEPT   # DNS
+    iptables -A INPUT -i "$AP_INTERFACE" -p udp --dport 53 -j ACCEPT   # DNS
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 67 -j ACCEPT   # DHCP
+    iptables -A INPUT -i "$AP_INTERFACE" -p udp --dport 67 -j ACCEPT   # DHCP
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 80 -j ACCEPT   # HTTP
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 443 -j ACCEPT  # HTTPS
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 8000 -j ACCEPT # FastAPI/Swagger
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 8080 -j ACCEPT # Main Service
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 7125 -j ACCEPT # Moonraker
+    
+    # Block internet access from AP (if main interface exists)
+    if [ -n "$MAIN_INTERFACE" ] && [ "$MAIN_INTERFACE" != "$AP_INTERFACE" ]; then
+        log "Blocking internet access from $AP_INTERFACE..."
+        iptables -A FORWARD -i "$AP_INTERFACE" -o "$MAIN_INTERFACE" -j REJECT --reject-with icmp-port-unreachable
+        iptables -A FORWARD -i "$MAIN_INTERFACE" -o "$AP_INTERFACE" -j REJECT --reject-with icmp-port-unreachable
+    fi
+    
+    # Save firewall rules
+    if command -v iptables-save >/dev/null 2>&1; then
+        mkdir -p /etc/iptables
+        iptables-save > /etc/iptables/rules.v4
+        log "✓ Firewall rules saved"
+    fi
+    
+    log "✓ Firewall configured - Local services allowed, internet blocked"
+}
+
+# Function to start services
+start_services() {
+    log "Step 6: Starting Access Point services..."
+    
     # Enable services
-    echo "Enabling and starting services..."
+    log "Enabling services..."
     systemctl unmask hostapd
     systemctl enable hostapd
     systemctl enable dnsmasq
     
-    # Restart networking services
-    echo "Restarting networking services..."
-    # Don't restart dhcpcd as it's not available, just ensure interface is up
-    systemctl restart NetworkManager 2>/dev/null || echo "NetworkManager restart not needed"
-    sleep 3
+    # Check if dnsmasq configuration is valid before starting
+    log "Validating dnsmasq configuration..."
+    if ! dnsmasq --test --conf-file=/etc/dnsmasq.conf; then
+        log "❌ dnsmasq configuration is invalid"
+        log "Configuration file content:"
+        cat /etc/dnsmasq.conf | tee -a "$LOG_FILE"
+        error_exit "dnsmasq configuration validation failed"
+    fi
     
-    # Start AP services
-    echo "Starting Access Point services..."
+    # Check if port 53 is already in use
+    log "Checking if DNS port 53 is available..."
+    if netstat -tulnp | grep :53 > /dev/null; then
+        log "⚠ Port 53 is already in use, stopping conflicting services..."
+        systemctl stop systemd-resolved 2>/dev/null || true
+        pkill -f systemd-resolved 2>/dev/null || true
+        sleep 2
+    fi
     
-    # Kill any existing hostapd processes
-    pkill -f hostapd 2>/dev/null || true
-    sleep 2
+    # Start dnsmasq first
+    log "Starting dnsmasq..."
     
-    # Start hostapd manually first to test
-    echo "Testing hostapd configuration..."
-    if hostapd -dd /etc/hostapd/hostapd.conf > /tmp/hostapd_debug.log 2>&1 & then
-        sleep 5
-        if pgrep -f hostapd > /dev/null; then
-            echo "Hostapd started successfully in debug mode"
-            kill $(pgrep -f hostapd) 2>/dev/null || true
-            sleep 2
+    # Try to start dnsmasq with detailed error reporting
+    if systemctl start dnsmasq; then
+        log "✓ dnsmasq service started"
+    else
+        log "❌ dnsmasq service failed to start"
+        log "Getting detailed error information..."
+        systemctl status dnsmasq.service | tee -a "$LOG_FILE"
+        journalctl -xeu dnsmasq.service --no-pager | tail -20 | tee -a "$LOG_FILE"
+        
+        # Try manual start for debugging
+        log "Trying manual dnsmasq start for debugging..."
+        pkill -f dnsmasq 2>/dev/null || true
+        if dnsmasq -C /etc/dnsmasq.conf --log-queries --log-dhcp > /tmp/dnsmasq_manual.log 2>&1 & then
+            sleep 3
+            if pgrep -f dnsmasq > /dev/null; then
+                log "✓ dnsmasq started manually"
+                log "Manual start log:"
+                cat /tmp/dnsmasq_manual.log | tee -a "$LOG_FILE"
+            else
+                log "❌ dnsmasq failed to start manually"
+                cat /tmp/dnsmasq_manual.log | tee -a "$LOG_FILE"
+                error_exit "dnsmasq failed to start both via systemd and manually"
+            fi
         else
-            echo "Hostapd failed to start, checking debug log..."
-            tail -20 /tmp/hostapd_debug.log
-            echo "Continuing with systemd service..."
+            log "❌ Manual dnsmasq start command failed"
+            error_exit "dnsmasq failed to start"
         fi
     fi
     
-    # Start services via systemd
-    systemctl start hostapd
-    systemctl start dnsmasq
+    # Wait for dnsmasq to start
+    sleep 3
     
-    echo "Waiting for Access Point to start..."
-    sleep 15
+    # Verify dnsmasq is running
+    if pgrep -f dnsmasq > /dev/null; then
+        log "✓ dnsmasq is running"
+        log "dnsmasq processes:"
+        ps aux | grep dnsmasq | grep -v grep | tee -a "$LOG_FILE"
+    else
+        log "❌ dnsmasq process is NOT running"
+        error_exit "dnsmasq failed to start"
+    fi
     
-    # Check if AP is running
-    if systemctl is-active --quiet hostapd && pgrep -f hostapd > /dev/null; then
-        echo "Access Point started successfully!"
-        echo "Network: $ssid"
-        echo "Password: $password"
-        echo "IP Address: 192.168.4.1"
-        echo "Interface: wlan0"
-        echo "Country: $country_code"
-        echo "Network Type: Hidden (SSID not broadcasted)"
-        
-        # Save credentials to file for reference
-        credentials_file="/home/pi/ap_credentials.txt"
-        echo "Access Point Credentials" > "$credentials_file"
-        echo "======================" >> "$credentials_file"
-        echo "SSID: $ssid" >> "$credentials_file"
-        echo "Password: $password" >> "$credentials_file"
-        echo "IP Address: 192.168.4.1" >> "$credentials_file"
-        echo "Interface: wlan0" >> "$credentials_file"
-        echo "Country: $country_code" >> "$credentials_file"
-        echo "Network Type: Hidden (SSID not broadcasted)" >> "$credentials_file"
-        echo "Created: $(date)" >> "$credentials_file"
-        echo "Credentials saved to: $credentials_file"
-        
-        # Generate QR code for WiFi connection
-        echo "Generating WiFi QR code..."
-        qr_code_file="/home/pi/printer_data/config/ap_qr.png"
-        
-        # Create directory if it doesn't exist
-        mkdir -p "$(dirname "$qr_code_file")"
-        
-        # Install required packages if not available
-        if ! command -v qrencode >/dev/null 2>&1; then
-            echo "Installing qrencode for QR code generation..."
-            apt update && apt install -y qrencode
+    # Test hostapd configuration
+    log "Testing hostapd configuration..."
+    if timeout 10 hostapd -dd /etc/hostapd/hostapd.conf > /tmp/hostapd_debug.log 2>&1; then
+        log "✓ hostapd configuration test passed"
+    else
+        log "⚠ hostapd configuration test failed, checking logs..."
+        tail -10 /tmp/hostapd_debug.log | tee -a "$LOG_FILE"
+    fi
+    
+    # Start hostapd
+    log "Starting hostapd..."
+    systemctl start hostapd || error_exit "Failed to start hostapd"
+    
+    # Wait for hostapd to start
+    sleep 5
+    
+    # Verify hostapd is running
+    if pgrep -f hostapd > /dev/null; then
+        log "✓ hostapd is running"
+    else
+        log "❌ hostapd process is NOT running"
+        systemctl status hostapd.service | tee -a "$LOG_FILE"
+        error_exit "hostapd failed to start"
+    fi
+    
+    log "✓ All services started successfully"
+}
+
+# Function to verify setup
+verify_setup() {
+    log "Step 7: Verifying Access Point setup..."
+    
+    local errors=0
+    
+    # Check interface IP
+    if ip addr show "$AP_INTERFACE" | grep -q "$AP_IP"; then
+        log "✓ $AP_INTERFACE has correct IP ($AP_IP)"
+    else
+        log "❌ $AP_INTERFACE does NOT have correct IP"
+        ((errors++))
+    fi
+    
+    # Check hostapd process
+    if pgrep -f hostapd > /dev/null; then
+        log "✓ hostapd process is running"
+    else
+        log "❌ hostapd process is NOT running"
+        ((errors++))
+    fi
+    
+    # Check dnsmasq process
+    if pgrep -f dnsmasq > /dev/null; then
+        log "✓ dnsmasq process is running"
+    else
+        log "❌ dnsmasq process is NOT running"
+        ((errors++))
+    fi
+    
+    # Check DHCP server
+    if netstat -ulnp | grep :67 > /dev/null; then
+        log "✓ DHCP server is listening on port 67"
+    else
+        log "❌ DHCP server is NOT listening"
+        ((errors++))
+    fi
+    
+    # Check DNS server
+    if netstat -ulnp | grep :53 > /dev/null; then
+        log "✓ DNS server is listening on port 53"
+    else
+        log "❌ DNS server is NOT listening"
+        ((errors++))
+    fi
+    
+    # Test local service access
+    log "Testing local service access..."
+    
+    # Test HTTP service (main page)
+    if timeout 5 curl -s http://"$AP_IP" > /dev/null; then
+        log "✓ HTTP service accessible"
+    else
+        log "❌ HTTP service NOT accessible"
+        ((errors++))
+    fi
+    
+    # Test FastAPI service (correct port 8000)
+    if timeout 5 curl -s http://"$AP_IP":8000 > /dev/null; then
+        log "✓ FastAPI service accessible"
+    else
+        log "❌ FastAPI service NOT accessible"
+        ((errors++))
+    fi
+    
+    # Test FastAPI docs specifically
+    if timeout 5 curl -s http://"$AP_IP":8000/docs > /dev/null; then
+        log "✓ Swagger API docs accessible"
+    else
+        log "❌ Swagger API docs NOT accessible"
+        ((errors++))
+    fi
+    
+    # Test DNS resolution (non-blocking)
+    log "Testing DNS resolution..."
+    dns_working=false
+    
+    # Test with nslookup first
+    if timeout 5 nslookup mainsail.local "$AP_IP" > /dev/null 2>&1; then
+        log "✓ DNS resolution working with nslookup"
+        dns_working=true
+    else
+        log "⚠ nslookup failed, trying alternative methods..."
+        # Try with host
+        if timeout 5 host mainsail.local "$AP_IP" > /dev/null 2>&1; then
+            log "✓ DNS resolution working with host"
+            dns_working=true
+        else
+            log "⚠ DNS resolution issues detected"
+            log "  Services will still be accessible via IP address"
+            log "  Checking DNS server basic functionality..."
+            
+            # Check if DNS server responds to basic queries
+            if timeout 3 telnet "$AP_IP" 53 </dev/null 2>/dev/null | grep -q "Connected"; then
+                log "✓ DNS server port is responsive"
+            else
+                log "⚠ DNS server port may have issues"
+            fi
+            
+            # Don't fail the entire setup for DNS issues, just warn
+            log "⚠ DNS resolution has issues - services accessible via IP only"
+            dns_working=false
         fi
-        
-        if ! command -v convert >/dev/null 2>&1; then
-            echo "Installing ImageMagick for image processing..."
-            apt update && apt install -y imagemagick
+    fi
+    
+    # Check for DHCP clients (optional)
+    if [ -f "/var/lib/misc/dnsmasq.leases" ] && [ -s "/var/lib/misc/dnsmasq.leases" ]; then
+        local client_count=$(wc -l < /var/lib/misc/dnsmasq.leases)
+        log "✓ DHCP has served $client_count client(s)"
+    else
+        log "ℹ No DHCP clients yet (normal for new setup)"
+    fi
+    
+    # Final assessment - DNS issues don't fail the setup
+    if [ $errors -eq 0 ]; then
+        log "✓ All critical verification checks passed"
+        if [ "$dns_working" = true ]; then
+            log "✓ DNS resolution working perfectly"
+        else
+            log "⚠ DNS has issues but services accessible via IP"
         fi
-        
-        # Generate initial QR code (larger size for better quality)
-        temp_qr="/tmp/temp_ap_qr.png"
-        wifi_string="WIFI:T:WPA;S:$ssid;P:$password;H:true;;"
-        if ! qrencode -o "$temp_qr" -s 10 "$wifi_string"; then
-            echo "Failed to generate QR code"
-            return 1
-        fi
-        
-        # Create final image with text and decorations
+        return 0
+    else
+        log "❌ $errors critical verification checks failed"
+        return 1
+    fi
+}
+
+# Function to generate QR code
+generate_qr_code() {
+    log "Generating WiFi QR code..."
+    
+    local qr_code_file="/home/pi/printer_data/config/ap_qr.png"
+    local ssid=$(grep "^SSID:" "$CREDENTIALS_FILE" | cut -d' ' -f2)
+    local password=$(grep "^Password:" "$CREDENTIALS_FILE" | cut -d' ' -f2)
+    
+    # Install required packages if needed
+    if ! command -v qrencode >/dev/null 2>&1; then
+        log "Installing qrencode for QR code generation..."
+        apt update && apt install -y qrencode
+    fi
+    
+    if ! command -v convert >/dev/null 2>&1; then
+        log "Installing ImageMagick for image processing..."
+        apt update && apt install -y imagemagick
+    fi
+    
+    # Generate QR code
+    local temp_qr="/tmp/temp_ap_qr.png"
+    local wifi_string="WIFI:T:WPA;S:$ssid;P:$password;H:true;;"
+    
+    if qrencode -o "$temp_qr" -s 10 "$wifi_string"; then
+        # Create final image with text
         convert "$temp_qr" \
             -bordercolor white -border 50 \
             -gravity north \
@@ -332,83 +769,97 @@ EOF
             -annotate +0+15 "Access Point - Scan to Connect" \
             "$qr_code_file"
         
-        # Clean up temporary file
         rm -f "$temp_qr"
         
         if [ -f "$qr_code_file" ]; then
-            echo "Access Point QR code generated: $qr_code_file"
-            echo "QR code includes SSID and password text"
-            echo "Scan this QR code to connect to the Access Point automatically"
-            echo "Note: This is a hidden network - SSID is not broadcasted"
+            log "✓ QR code generated: $qr_code_file"
         else
-            echo "Failed to generate final QR code image"
+            log "❌ Failed to generate final QR code"
         fi
+    else
+        log "❌ Failed to generate QR code"
+    fi
+}
+
+# Main execution function
+main() {
+    log "Starting Access Point setup process..."
+    log "======================================"
+    
+    # Initialize log file
+    mkdir -p "$(dirname "$LOG_FILE")"
+    touch "$LOG_FILE"
+    
+    # Execute setup steps
+    prepare_wlan0_interface || error_exit "Interface preparation failed"
+    install_ap_requirements || error_exit "Package installation failed"
+    configure_network_interface || error_exit "Network configuration failed"
+    configure_dnsmasq || error_exit "dnsmasq configuration failed"
+    configure_hostapd || error_exit "hostapd configuration failed"
+    configure_firewall || error_exit "Firewall configuration failed"
+    optimize_dns_resolution || error_exit "DNS optimization failed"
+    start_services || error_exit "Service startup failed"
+    
+    # Wait for services to stabilize
+    log "Waiting for services to stabilize..."
+    sleep 10
+    
+    # Verify setup
+    if verify_setup; then
+        log ""
+        log "🎉 Access Point setup completed successfully!"
+        log "=========================================="
+        
+        # Final comprehensive test
+        log "Running final connectivity test..."
+        if timeout 5 curl -s http://"$AP_IP":8000/docs > /dev/null && \
+           timeout 5 curl -s http://"$AP_IP":8000 > /dev/null; then
+            log "✅ All services are accessible and working!"
+        else
+            log "⚠ Some services may need additional configuration"
+        fi
+        
+        # Display connection info
+        local ssid=$(grep "^SSID:" "$CREDENTIALS_FILE" | cut -d' ' -f2)
+        local password=$(grep "^Password:" "$CREDENTIALS_FILE" | cut -d' ' -f2)
+        
+        log ""
+        log "📱 Connection Information:"
+        log "========================"
+        log "📡 Network: $ssid"
+        log "🔑 Password: $password"
+        log "🌐 IP Address: $AP_IP"
+        log "📡 Interface: $AP_INTERFACE"
+        log "🌍 Country: IT"
+        log "🔒 Network Type: Hidden (SSID not broadcasted)"
+        log ""
+        log "📱 Local Services Access:"
+        log "=========================="
+        log "📊 Swagger API (Online): http://$AP_IP:8000/docs"
+        log "📋 API Documentation (Offline): http://$AP_IP:8000/docs-offline"
+        log "🖥️  Main Service: http://$AP_IP:8000"
+        log "🖨️  Mainsail: http://$AP_IP"
+        log "🔗 DNS Names: mainsail.local, api.local, g2.local"
+        log "📊 Network API: http://$AP_IP:8000/api/wifi/status"
+        log ""
+        log "🔒 Internet access is BLOCKED - Only local services available"
+        log ""
+        log "📋 Testing Steps:"
+        log "=================="
+        log "1. Connect a device to the network '$ssid'"
+        log "2. Use the password: $password"
+        log "3. You should get an IP address in the range 192.168.4.2-192.168.4.20"
+        log "4. Test connectivity by accessing http://$AP_IP:8000/docs"
+        log ""
+        log "📄 Credentials saved to: $CREDENTIALS_FILE"
+        log "📝 Log file: $LOG_FILE"
+        
+        # Generate QR code
+        generate_qr_code
         
         return 0
     else
-        echo "Failed to start Access Point"
-        echo "Please check the hostapd service status:"
-        systemctl status hostapd
-        echo ""
-        echo "Checking hostapd configuration:"
-        echo "Interface: $(grep '^interface=' /etc/hostapd/hostapd.conf)"
-        echo "Driver: $(grep '^driver=' /etc/hostapd/hostapd.conf)"
-        echo "SSID: $(grep '^ssid=' /etc/hostapd/hostapd.conf)"
-        echo "Channel: $(grep '^channel=' /etc/hostapd/hostapd.conf)"
-        echo "HW Mode: $(grep '^hw_mode=' /etc/hostapd/hostapd.conf)"
-        echo ""
-        echo "Checking wlan0 interface status:"
-        ip link show wlan0
-        echo ""
-        echo "Checking if wlan0 is up:"
-        ip addr show wlan0
-        echo ""
-        echo "Debug log (last 20 lines):"
-        tail -20 /tmp/hostapd_debug.log 2>/dev/null || echo "No debug log found"
-        return 1
-    fi
-}
-
-# Function to configure WiFi network (legacy - not used in AP mode)
-configure_wifi_network() {
-    echo "This function is deprecated in AP mode. Use configure_access_point() instead."
-    return 0
-}
-
-# Main execution flow
-main() {
-    echo "Starting Access Point setup process..."
-    echo "======================================"
-    echo
-    
-    # Step 0: Check wlan0 interface
-    if ! check_wlan0_interface; then
-        echo
-        echo "wlan0 interface not available. Exiting."
-        echo "Please ensure wlan0 is available before running this script."
-        exit 1
-    fi
-    
-    # Step 1: Install AP requirements
-    install_ap_requirements
-    
-    echo
-    # Step 2: Configure Access Point
-    if configure_access_point; then
-        echo
-        echo "Access Point setup completed successfully!"
-        echo "wlan0 is now configured as an Access Point (hotspot)."
-        echo "Network credentials have been saved to /home/pi/ap_credentials.txt"
-        echo
-        echo "To test the Access Point:"
-        echo "1. Connect a device to the network '$ssid'"
-        echo "2. Use the password: $password"
-        echo "3. You should get an IP address in the range 192.168.4.2-192.168.4.20"
-        echo "4. Test connectivity by pinging 192.168.4.1"
-    else
-        echo
-        echo "Access Point configuration failed. Please check the error messages above."
-        exit 1
+        error_exit "Setup verification failed. Check $LOG_FILE for details."
     fi
 }
 

@@ -4,6 +4,8 @@ FastAPI application factory for G2-Service
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from .network import NetworkManager, WiFiNetwork, WiFiConnectionRequest, WiFiConnectionResult
 import logging
 import os
@@ -79,13 +81,23 @@ def get_ap_testing_info() -> dict:
 def create_app(config_path: str = None) -> FastAPI:
     """Create and configure FastAPI application"""
     
+    # Create static directory for offline assets
+    static_dir = os.path.join(os.path.dirname(__file__), '..', 'static')
+    os.makedirs(static_dir, exist_ok=True)
+    
     app = FastAPI(
         title="G2-Service API",
-        description="Backend API per Stampante G2",
+        description="Backend API per Stampante G2 - Offline Mode",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url="/redoc"
+        redoc_url="/redoc",
+        swagger_ui_parameters={"deepLinking": False, "displayRequestDuration": True},
+        swagger_ui_oauth2_redirect_url=None,
     )
+    
+    # Mount static files for offline Swagger assets
+    if os.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
     
     # Add CORS middleware
     app.add_middleware(
@@ -95,6 +107,34 @@ def create_app(config_path: str = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    @app.get("/docs-offline", response_class=HTMLResponse)
+    async def get_offline_docs():
+        """
+        Get offline API documentation (works without internet)
+        
+        Returns:
+            HTML page with complete API documentation
+        """
+        static_dir = os.path.join(os.path.dirname(__file__), '..', 'static')
+        docs_file = os.path.join(static_dir, 'api-docs.html')
+        
+        if os.path.exists(docs_file):
+            with open(docs_file, 'r') as f:
+                return HTMLResponse(content=f.read())
+        else:
+            # Fallback to simple HTML if file doesn't exist
+            return HTMLResponse(content="""
+            <!DOCTYPE html>
+            <html>
+            <head><title>G2-Service API</title></head>
+            <body>
+                <h1>G2-Service API</h1>
+                <p>Offline documentation not available. Use regular /docs endpoint.</p>
+                <p><a href="/docs">Go to Swagger UI</a></p>
+            </body>
+            </html>
+            """)
     
     @app.get("/")
     async def root():

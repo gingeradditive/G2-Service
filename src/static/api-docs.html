@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>G2-Service API - Offline Documentation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .api-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .endpoint { background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff; }
+        .method { display: inline-block; padding: 4px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: bold; margin-right: 8px; }
+        .get { background: #28a745; }
+        .post { background: #007bff; }
+        .delete { background: #dc3545; }
+        .path { font-family: monospace; background: #e9ecef; padding: 2px 6px; border-radius: 3px; }
+        .description { margin-top: 10px; color: #666; }
+        .test-section { margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 5px; }
+        .btn { background: #007bff; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .btn:hover { background: #0056b3; }
+        .response { margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 4px; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 G2-Service API Documentation</h1>
+            <p>Offline API Documentation - No Internet Required</p>
+            <p><strong>Base URL:</strong> <code>http://192.168.4.1:8000</code></p>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Quick API Test</h3>
+            <button class="btn" onclick="testAPI('/health')">Test Health</button>
+            <button class="btn" onclick="testAPI('/')">Test Root</button>
+            <button class="btn" onclick="testAPI('/api/wifi/status')">Test WiFi Status</button>
+            <div id="response" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="api-list">
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <span class="path">/</span>
+                <div class="description">Basic API information and version</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <span class="path">/health</span>
+                <div class="description">Health check endpoint</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <span class="path">/api/wifi/networks</span>
+                <div class="description">Get list of visible WiFi networks with signal strength and security</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <span class="path">/api/wifi/status</span>
+                <div class="description">Get WiFi adapter status information</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <span class="path">/api/wifi/rescan</span>
+                <div class="description">Trigger WiFi network rescan</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <span class="path">/api/wifi/connect</span>
+                <div class="description">Connect to a WiFi network</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <span class="path">/api/wifi/disconnect</span>
+                <div class="description">Disconnect from current WiFi network</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method delete">DELETE</span>
+                <span class="path">/api/wifi/networks/{ssid}</span>
+                <div class="description">Delete a saved WiFi network configuration</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <span class="path">/api/wifi/forget-network</span>
+                <div class="description">Forget a WiFi network (remove password and saved configuration)</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <span class="path">/api/access-point/info</span>
+                <div class="description">Get Access Point configuration and testing information</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; padding: 20px; background: #e7f3ff; border-radius: 5px;">
+            <h3>📱 Access Point Information</h3>
+            <p>This API is running on a local Access Point. Services are accessible at:</p>
+            <ul>
+                <li><strong>API Base:</strong> <code>http://192.168.4.1:8000</code></li>
+                <li><strong>Mainsail:</strong> <code>http://192.168.4.1</code></li>
+                <li><strong>DNS Names:</strong> mainsail.local, api.local, g2.local</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI(endpoint) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.style.display = 'block';
+            responseDiv.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                responseDiv.textContent = `Status: ${response.status}\n\n${JSON.stringify(data, null, 2)}`;
+                responseDiv.style.background = '#d4edda';
+            } catch (error) {
+                responseDiv.textContent = `Error: ${error.message}`;
+                responseDiv.style.background = '#f8d7da';
+            }
+        }
+    </script>
+</body>
+</html>
