@@ -6,12 +6,75 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .network import NetworkManager, WiFiNetwork, WiFiConnectionRequest, WiFiConnectionResult
 import logging
+import os
+import re
 
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+def get_ap_credentials() -> dict:
+    """Read Access Point credentials from file"""
+    credentials_file = "/home/pi/ap_credentials.txt"
+    
+    if not os.path.exists(credentials_file):
+        return None
+    
+    try:
+        with open(credentials_file, 'r') as f:
+            content = f.read()
+        
+        credentials = {}
+        for line in content.split('\n'):
+            if ':' in line and not line.startswith('='):
+                key, value = line.split(':', 1)
+                credentials[key.strip().lower()] = value.strip()
+        
+        return credentials
+    except Exception as e:
+        logging.error(f"Failed to read AP credentials: {str(e)}")
+        return None
+
+def get_ap_testing_info() -> dict:
+    """Generate Access Point testing information"""
+    credentials = get_ap_credentials()
+    
+    if not credentials:
+        return {
+            "available": False,
+            "message": "Access Point credentials not found. Please run setup_wifi_complete.sh first."
+        }
+    
+    ssid = credentials.get('ssid', 'Unknown')
+    password = credentials.get('password', 'Unknown')
+    ip_address = credentials.get('ip address', '192.168.4.1')
+    
+    return {
+        "available": True,
+        "access_point": {
+            "ssid": ssid,
+            "password": password,
+            "ip_address": ip_address,
+            "interface": credentials.get('interface', 'wlan0'),
+            "country": credentials.get('country', 'IT'),
+            "network_type": credentials.get('network type', 'Hidden'),
+            "ip_range": "192.168.4.2-192.168.4.20"
+        },
+        "testing_steps": [
+            f"1. Connect a device to the network '{ssid}'",
+            f"2. Use the password: {password}",
+            "3. You should get an IP address in the range 192.168.4.2-192.168.4.20",
+            f"4. Test connectivity by pinging {ip_address}"
+        ],
+        "notes": [
+            "This is a hidden network - SSID is not broadcasted",
+            "You may need to manually add the network on your device",
+            "The Access Point runs on wlan0 interface",
+            "Client connections are managed via wlan1 interface"
+        ]
+    }
 
 def create_app(config_path: str = None) -> FastAPI:
     """Create and configure FastAPI application"""
@@ -164,5 +227,19 @@ def create_app(config_path: str = None) -> FastAPI:
             return WiFiConnectionResult(**result)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to forget network: {str(e)}")
+    
+    @app.get("/api/access-point/info")
+    async def get_access_point_info():
+        """
+        Get Access Point testing information
+        
+        Returns:
+            Access Point configuration and testing steps
+        """
+        try:
+            info = get_ap_testing_info()
+            return info
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get Access Point info: {str(e)}")
     
     return app
