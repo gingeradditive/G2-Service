@@ -12,6 +12,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.api.app import create_app
 
+# Create app instance at module level for uvicorn
+app = create_app()
+
 def main():
     """Start the G2-Service API server"""
     app = create_app()
