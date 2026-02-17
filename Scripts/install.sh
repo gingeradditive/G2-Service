@@ -34,10 +34,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=root
+Group=root
 WorkingDirectory=$(pwd)
 Environment=PATH=$(pwd)/venv/bin
-ExecStart=$(pwd)/venv/bin/uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 4
+ExecStart=$(pwd)/venv/bin/python src/main.py
 Restart=always
 RestartSec=10
 
@@ -80,6 +81,6 @@ echo "Setting permissions..."
 chmod +x Scripts/deploy.sh
 
 echo "Installation completed successfully!"
-echo "G2-Service is running on http://localhost:8000"
+echo "G2-Service is running on http://localhost:8080"
 echo "Service status: sudo systemctl status g2-service"
 echo "Service logs: sudo journalctl -u g2-service -f"

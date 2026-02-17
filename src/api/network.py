@@ -59,9 +59,13 @@ class NetworkManager:
         if not self._check_wlan1_availability():
             raise Exception("wlan1 interface not available. Please ensure wlan1 is properly configured.")
     
-    def _run_command(self, command: List[str]) -> str:
+    def _run_command(self, command: List[str], use_sudo: bool = False) -> str:
         """Execute a shell command and return output"""
         try:
+            # Add sudo for commands that require elevated privileges
+            if use_sudo:
+                command = ["sudo"] + command
+            
             result = subprocess.run(
                 command,
                 capture_output=True,
@@ -394,7 +398,7 @@ class NetworkManager:
             self._run_command([
                 self.nmcli_path,
                 "device", "wifi", "rescan"
-            ])
+            ], use_sudo=True)
             logger.info("WiFi rescan triggered successfully")
             return True
         except Exception as e:
@@ -457,7 +461,7 @@ class NetworkManager:
                         self.nmcli_path,
                         "device", "wifi", "connect", ssid,
                         "password", password
-                    ])
+                    ], use_sudo=True)
                     logger.info(f"Direct connection successful for {ssid}")
                 except Exception as e1:
                     logger.warning(f"Direct connection failed: {str(e1)}, trying manual setup")
@@ -472,7 +476,7 @@ class NetworkManager:
                             "con-name", ssid,
                             "ifname", self.wifi_interface,
                             "ssid", ssid
-                        ])
+                        ], use_sudo=True)
                         
                         # Set password
                         self._run_command([
@@ -480,13 +484,13 @@ class NetworkManager:
                             "connection", "modify", ssid,
                             "wifi-sec.key-mgmt", "wpa-psk",
                             "wifi-sec.psk", password
-                        ])
+                        ], use_sudo=True)
                         
                         # Activate connection
                         self._run_command([
                             self.nmcli_path,
                             "connection", "up", ssid
-                        ])
+                        ], use_sudo=True)
                         logger.info(f"Manual connection successful for {ssid}")
                         
                     except Exception as e2:
@@ -499,7 +503,7 @@ class NetworkManager:
                 result = self._run_command([
                     self.nmcli_path,
                     "device", "wifi", "connect", ssid
-                ])
+                ], use_sudo=True)
             
             # Wait a moment for connection to establish
             import time
@@ -562,7 +566,7 @@ class NetworkManager:
                 }
             
             # Disconnect
-            self._run_command([self.nmcli_path, "connection", "down", current_connection])
+            self._run_command([self.nmcli_path, "connection", "down", current_connection], use_sudo=True)
             
             # Verify disconnection
             time.sleep(2)
@@ -679,13 +683,13 @@ class NetworkManager:
                 status = self.get_wifi_status()
                 current_connection = status.get("adapter", {}).get("connection")
                 if current_connection == ssid:
-                    self._run_command([self.nmcli_path, "connection", "down", ssid])
+                    self._run_command([self.nmcli_path, "connection", "down", ssid], use_sudo=True)
                     logger.info(f"Disconnected from {ssid} before deletion")
             except:
                 pass
             
             # Delete the connection
-            self._run_command([self.nmcli_path, "connection", "delete", ssid])
+            self._run_command([self.nmcli_path, "connection", "delete", ssid], use_sudo=True)
             
             # Verify deletion
             updated_networks = self.get_saved_networks()
