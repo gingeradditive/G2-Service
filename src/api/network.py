@@ -45,7 +45,7 @@ class NetworkManager:
         try:
             # Check if wlan1 interface exists
             result = subprocess.run(
-                ["ip", "link", "show", "wlan1"],
+                ["/sbin/ip", "link", "show", "wlan1"],
                 capture_output=True,
                 text=True,
                 check=True
@@ -297,7 +297,7 @@ class NetworkManager:
                 # Validate wlan1 is available before proceeding
                 self._validate_wlan1()
                 
-                output = self._run_command(["ip", "addr", "show", device_name])
+                output = self._run_command(["/sbin/ip", "addr", "show", device_name])
                 
                 ip_info = {"ipv4": None, "ipv6": None, "mac": None}
                 
