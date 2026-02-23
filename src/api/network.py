@@ -942,6 +942,22 @@ class NetworkManager:
                     "status": "already_hidden"
                 }
             
+            # Mark AP as hidden in hostapd config
+            config_file = "/etc/hostapd/hostapd.conf"
+            try:
+                if os.path.exists(config_file):
+                    with open(config_file, "r") as f:
+                        config_content = f.read()
+                    updated_content = config_content.replace(
+                        "ignore_broadcast_ssid=0", "ignore_broadcast_ssid=1"
+                    )
+                    if updated_content != config_content:
+                        import subprocess as _sp
+                        _sp.run(["sudo", "tee", config_file], input=updated_content, text=True, capture_output=True)
+                        logger.info("Set ignore_broadcast_ssid=1 in hostapd config")
+            except Exception as e_cfg:
+                logger.warning(f"Failed to update hostapd config visibility: {str(e_cfg)}")
+
             # Stop hostapd service
             try:
                 self._run_command(["sudo", "systemctl", "stop", "hostapd"], use_sudo=True)
@@ -1013,6 +1029,22 @@ class NetworkManager:
                     "status": "already_active"
                 }
             
+            # Ensure AP is visible (not hidden) in hostapd config
+            config_file = "/etc/hostapd/hostapd.conf"
+            try:
+                if os.path.exists(config_file):
+                    with open(config_file, "r") as f:
+                        config_content = f.read()
+                    updated_content = config_content.replace(
+                        "ignore_broadcast_ssid=1", "ignore_broadcast_ssid=0"
+                    )
+                    if updated_content != config_content:
+                        import subprocess as _sp
+                        _sp.run(["sudo", "tee", config_file], input=updated_content, text=True, capture_output=True)
+                        logger.info("Set ignore_broadcast_ssid=0 in hostapd config")
+            except Exception as e_cfg:
+                logger.warning(f"Failed to update hostapd config visibility: {str(e_cfg)}")
+
             # Start hostapd service
             try:
                 self._run_command(["sudo", "systemctl", "start", "hostapd"], use_sudo=True)
@@ -1022,7 +1054,6 @@ class NetworkManager:
                 # Try alternative method
                 try:
                     # Check if hostapd config exists and start manually
-                    config_file = "/etc/hostapd/hostapd.conf"
                     if os.path.exists(config_file):
                         self._run_command(["sudo", "hostapd", "-B", config_file], use_sudo=True)
                         logger.info("hostapd started manually")
