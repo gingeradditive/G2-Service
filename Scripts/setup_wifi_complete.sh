@@ -3,6 +3,42 @@
 # Complete WiFi Setup Script for Access Point Mode - Refactored Version
 # This script configures wlan0 as a WiFi Access Point (hotspot) with proper local services access
 
+# Usage: ./setup_wifi_complete.sh [--hidden=true|false]
+#   --hidden: Set to 'true' to hide SSID (default: true), 'false' to broadcast SSID
+
+# Default values
+AP_HIDDEN_DEFAULT="true"
+
+# Parse command line arguments
+AP_HIDDEN="$AP_HIDDEN_DEFAULT"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --hidden=*)
+            AP_HIDDEN="${1#*=}"
+            if [[ "$AP_HIDDEN" != "true" && "$AP_HIDDEN" != "false" ]]; then
+                echo "Error: --hidden must be 'true' or 'false'"
+                echo "Usage: $0 [--hidden=true|false]"
+                exit 1
+            fi
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 [--hidden=true|false]"
+            echo "  --hidden: Set to 'true' to hide SSID (default: true), 'false' to broadcast SSID"
+            echo "  --help:   Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown option $1"
+            echo "Usage: $0 [--hidden=true|false]"
+            exit 1
+            ;;
+    esac
+done
+
+echo "Access Point setup starting with SSID hidden: $AP_HIDDEN"
+
 # Banner
 echo "                                                        
                  5@?                                                            
@@ -31,7 +67,8 @@ AP_NETMASK="255.255.255.0"
 AP_NETWORK="192.168.4.0/24"
 
 # Set to "true" to hide the SSID (not broadcasted), "false" to make it visible
-AP_HIDDEN="false"
+# Default is set via command line argument (--hidden)
+# Current value: AP_HIDDEN="$AP_HIDDEN"
 
 # Logging function
 log() {
