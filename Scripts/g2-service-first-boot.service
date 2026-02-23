@@ -1,6 +1,7 @@
 [Unit]
 Description=G2-Service First Boot WiFi Setup
-After=network.target
+After=network.target network-online.target sys-subsystem-net-devices-wlan0.device
+Wants=network-online.target sys-subsystem-net-devices-wlan0.device
 ConditionPathExists=!/etc/g2-service/first-boot-completed
 
 [Service]

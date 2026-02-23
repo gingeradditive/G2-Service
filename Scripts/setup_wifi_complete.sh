@@ -185,12 +185,19 @@ prepare_wlan0_interface() {
     pkill -f hostapd 2>/dev/null || true
     pkill -f dnsmasq 2>/dev/null || true
     
-    # Remove NetworkManager management of wlan0
+    # Remove NetworkManager management of wlan0 permanently
     if command -v nmcli >/dev/null 2>&1; then
         log "Removing NetworkManager management of $AP_INTERFACE..."
         nmcli device set "$AP_INTERFACE" managed no 2>/dev/null || true
-        systemctl restart NetworkManager 2>/dev/null || true
     fi
+    
+    # Write persistent NM unmanaged config so wlan0 is never re-claimed after reboot
+    mkdir -p /etc/NetworkManager/conf.d
+    cat > /etc/NetworkManager/conf.d/unmanaged-wlan0.conf <<EOF
+[keyfile]
+unmanaged-devices=interface-name:$AP_INTERFACE
+EOF
+    log "✓ NetworkManager will not manage $AP_INTERFACE (persistent)"
     
     # Wait for processes to stop
     sleep 3
@@ -261,8 +268,6 @@ dhcp-authoritative
 listen-address=$AP_IP
 bind-interfaces
 no-resolv
-# Use local DNS only for faster resolution
-server=127.0.0.1
 cache-size=1000
 log-queries
 log-dhcp
@@ -273,9 +278,6 @@ address=/api.local/$AP_IP
 address=/klipper.local/$AP_IP
 address=/printer.local/$AP_IP
 address=/g2.local/$AP_IP
-
-# Block external DNS queries to prevent slowdown
-server=/#/127.0.0.1
 EOF
     
     # Create leases directory
@@ -309,7 +311,6 @@ ssid=$ssid
 hw_mode=g
 channel=6
 ieee80211n=1
-ieee80211ac=1
 ieee80211ax=0
 wmm_enabled=1
 macaddr_acl=0

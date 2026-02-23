@@ -830,6 +830,27 @@ class NetworkManager:
                     ap_status["hostapd_running"] = True
                     ap_status["ap_active"] = True
                     ap_status["status"] = "active"
+                    # If hostapd is running but IP is missing, restore it
+                    if not ap_status.get("ip_address"):
+                        try:
+                            subprocess.run(
+                                ["ip", "addr", "add", "192.168.4.1/24", "dev", "wlan0"],
+                                capture_output=True, text=True
+                            )
+                            subprocess.run(
+                                ["ip", "link", "set", "wlan0", "up"],
+                                capture_output=True, text=True
+                            )
+                            output2 = self._run_command(["/sbin/ip", "addr", "show", "wlan0"])
+                            for line in output2.split('\n'):
+                                if "inet " in line and "inet6" not in line:
+                                    ip_part = line.split("inet ")[1].split()[0]
+                                    if "/" in ip_part:
+                                        ap_status["ip_address"] = ip_part.split("/")[0]
+                                        break
+                            logger.info(f"Restored wlan0 IP: {ap_status.get('ip_address')}")
+                        except Exception as e_ip:
+                            logger.warning(f"Failed to restore wlan0 IP: {str(e_ip)}")
                 else:
                     ap_status["hostapd_running"] = False
                     ap_status["status"] = "inactive"
@@ -872,6 +893,9 @@ class NetworkManager:
             if ap_status["interface_available"] and ap_status["ap_active"] and ap_status["ip_address"]:
                 ap_status["status"] = "working"
                 ap_status["message"] = "Access Point is working correctly"
+            elif ap_status["interface_available"] and ap_status["ap_active"] and not ap_status["ip_address"]:
+                ap_status["status"] = "degraded"
+                ap_status["message"] = "Access Point is running but IP address is missing (NetworkManager may have reset it)"
             elif ap_status["interface_available"] and not ap_status["ap_active"]:
                 ap_status["status"] = "inactive"
                 ap_status["message"] = "Access Point is not active"
