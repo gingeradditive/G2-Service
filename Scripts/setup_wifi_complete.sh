@@ -222,9 +222,33 @@ configure_network_interface() {
     log "Bringing $AP_INTERFACE up..."
     ip link set "$AP_INTERFACE" up || error_exit "Failed to bring $AP_INTERFACE up"
     
-    # Configure static IP
+    # Configure static IP persistently via dhcpcd.conf (survives reboots)
+    log "Writing persistent static IP config to /etc/dhcpcd.conf..."
+    # Remove any existing wlan0 static block first
+    sed -i '/^# G2-AP static/,/^$/d' /etc/dhcpcd.conf 2>/dev/null || true
+    cat >> /etc/dhcpcd.conf <<EOF
+
+# G2-AP static
+interface $AP_INTERFACE
+static ip_address=$AP_IP/24
+nohook wpa_supplicant
+EOF
+    log "✓ dhcpcd static IP written"
+    
+    # Also write a systemd-networkd config as fallback (if networkd is active)
+    mkdir -p /etc/systemd/network
+    cat > /etc/systemd/network/10-${AP_INTERFACE}-ap.network <<EOF
+[Match]
+Name=$AP_INTERFACE
+
+[Network]
+Address=$AP_IP/24
+ConfigureWithoutCarrier=yes
+EOF
+    
+    # Apply IP now (runtime)
     log "Configuring static IP: $AP_IP/$AP_NETMASK"
-    ip addr add "$AP_IP/$AP_NETMASK" dev "$AP_INTERFACE" || error_exit "Failed to configure static IP"
+    ip addr add "$AP_IP/$AP_NETMASK" dev "$AP_INTERFACE" 2>/dev/null || true
     
     # Optimize network interface for performance
     log "Optimizing network interface performance..."
