@@ -105,11 +105,13 @@ install_ap_requirements() {
     log "Installing required packages..."
     
     # Install core packages first
-    apt install -y \
+    DEBIAN_FRONTEND=noninteractive apt install -y \
         hostapd \
         dnsmasq \
         net-tools \
         iptables \
+        iptables-persistent \
+        netfilter-persistent \
         wireless-tools \
         wpasupplicant || error_exit "Failed to install core packages"
     
@@ -118,7 +120,7 @@ install_ap_requirements() {
     apt install -y haveged 2>/dev/null || log "haveged not available, skipping"
     
     # Verify core packages are installed
-    for package in hostapd dnsmasq net-tools iptables; do
+    for package in hostapd dnsmasq net-tools iptables iptables-persistent; do
         if ! dpkg -l | grep -q "^ii.*$package "; then
             error_exit "Required package $package not installed"
         fi
@@ -369,15 +371,118 @@ Country: IT
 Network Type: Hidden (SSID not broadcasted)
 Created: $(date)
 
-Local Services:
-- Swagger API (Online): http://$AP_IP:8080/docs
-- API Documentation (Offline): http://$AP_IP:8080/docs-offline
-- Main Service: http://$AP_IP:8080
-- Mainsail: http://$AP_IP
-- DNS Names: mainsail.local, api.local, g2.local
+Local Services (via nginx on port 80):
+- Mainsail:            http://$AP_IP/
+- Swagger UI:          http://$AP_IP/docs
+- G2-Service API:      http://$AP_IP/g2/
+- Moonraker API:       http://$AP_IP/api
+- Moonraker WebSocket: ws://$AP_IP/websocket
+
+Direct ports (also accessible):
+- G2-Service FastAPI:  http://$AP_IP:8080
+- Moonraker:           http://$AP_IP:7125
+
+DNS Names: mainsail.local, api.local, g2.local
 EOF
     
     log "✓ Credentials saved to: $CREDENTIALS_FILE"
+}
+
+# Function to configure nginx as reverse proxy on the AP interface
+configure_nginx_ap() {
+    log "Configuring nginx reverse proxy on $AP_IP..."
+    
+    if ! command -v nginx >/dev/null 2>&1; then
+        log "nginx not installed, installing..."
+        apt install -y nginx || error_exit "Failed to install nginx"
+    fi
+    
+    # Write dedicated AP virtual host
+    cat > /etc/nginx/sites-available/g2-ap <<EOF
+# G2-Service AP reverse proxy - serves all local services on 192.168.4.1
+server {
+    listen $AP_IP:80;
+    server_name $AP_IP mainsail.local api.local g2.local klipper.local printer.local;
+
+    # Mainsail static files
+    location / {
+        root /var/www/mainsail;
+        index index.html;
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # G2-Service FastAPI - /g2/ prefix
+    location /g2/ {
+        proxy_pass http://127.0.0.1:8080/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_connect_timeout 5;
+        proxy_read_timeout 30;
+        proxy_buffering off;
+    }
+
+    # G2-Service FastAPI docs shortcut
+    location /docs {
+        proxy_pass http://127.0.0.1:8080/docs;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_buffering off;
+    }
+
+    # Moonraker API
+    location /printer {
+        proxy_pass http://127.0.0.1:7125;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_connect_timeout 5;
+        proxy_read_timeout 30;
+        proxy_buffering off;
+    }
+
+    location /api {
+        proxy_pass http://127.0.0.1:7125;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_connect_timeout 5;
+        proxy_read_timeout 30;
+        proxy_buffering off;
+    }
+
+    # Moonraker WebSocket
+    location /websocket {
+        proxy_pass http://127.0.0.1:7125/websocket;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+        proxy_buffering off;
+    }
+
+    access_log /var/log/nginx/g2-ap_access.log;
+    error_log  /var/log/nginx/g2-ap_error.log;
+}
+EOF
+    
+    # Enable the site
+    ln -sf /etc/nginx/sites-available/g2-ap /etc/nginx/sites-enabled/g2-ap
+    
+    # Test and reload nginx
+    if nginx -t; then
+        systemctl enable nginx
+        systemctl reload nginx 2>/dev/null || systemctl start nginx
+        log "✓ nginx AP reverse proxy configured on http://$AP_IP"
+        log "  http://$AP_IP        → Mainsail"
+        log "  http://$AP_IP/g2/   → G2-Service FastAPI"
+        log "  http://$AP_IP/docs  → Swagger UI"
+        log "  http://$AP_IP/api   → Moonraker API"
+    else
+        log "❌ nginx configuration error - check /etc/nginx/sites-available/g2-ap"
+    fi
 }
 
 # Function to optimize DNS configuration
@@ -471,10 +576,23 @@ configure_firewall() {
     iptables -A INPUT -i "$AP_INTERFACE" -p udp --dport 53 -j ACCEPT   # DNS
     iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 67 -j ACCEPT   # DHCP
     iptables -A INPUT -i "$AP_INTERFACE" -p udp --dport 67 -j ACCEPT   # DHCP
-    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 80 -j ACCEPT   # HTTP
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 80 -j ACCEPT   # HTTP / nginx (Mainsail)
     iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 443 -j ACCEPT  # HTTPS
     iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 8080 -j ACCEPT # FastAPI/Swagger/Main Service
-    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 7125 -j ACCEPT # Moonraker
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 7125 -j ACCEPT # Moonraker (direct)
+    
+    # DNAT: redirect AP clients hitting 192.168.4.1:7125 to Moonraker on 127.0.0.1:7125
+    # Required because Moonraker binds only on 127.0.0.1 by default
+    log "Adding DNAT rules for localhost-bound services..."
+    iptables -t nat -A PREROUTING -i "$AP_INTERFACE" -p tcp --dport 7125 \
+        -j DNAT --to-destination 127.0.0.1:7125
+    
+    # MASQUERADE on loopback so the Pi's services see traffic as coming from 127.0.0.1
+    iptables -t nat -A POSTROUTING -o lo -j MASQUERADE
+    
+    # Allow forwarding to loopback for DNAT'd traffic
+    iptables -A FORWARD -i "$AP_INTERFACE" -o lo -j ACCEPT
+    iptables -A FORWARD -i lo -o "$AP_INTERFACE" -j ACCEPT
     
     # Block internet access from AP (if main interface exists)
     if [ -n "$MAIN_INTERFACE" ] && [ "$MAIN_INTERFACE" != "$AP_INTERFACE" ]; then
@@ -483,14 +601,16 @@ configure_firewall() {
         iptables -A FORWARD -i "$MAIN_INTERFACE" -o "$AP_INTERFACE" -j REJECT --reject-with icmp-port-unreachable
     fi
     
-    # Save firewall rules
-    if command -v iptables-save >/dev/null 2>&1; then
-        mkdir -p /etc/iptables
-        iptables-save > /etc/iptables/rules.v4
-        log "✓ Firewall rules saved"
-    fi
+    # Save firewall rules persistently (survives reboots via iptables-persistent)
+    mkdir -p /etc/iptables
+    iptables-save > /etc/iptables/rules.v4
+    ip6tables-save > /etc/iptables/rules.v6 2>/dev/null || true
+    log "✓ Firewall rules saved persistently to /etc/iptables/rules.v4"
     
-    log "✓ Firewall configured - Local services allowed, internet blocked"
+    # Enable netfilter-persistent to restore rules on boot
+    systemctl enable netfilter-persistent 2>/dev/null || true
+    
+    log "✓ Firewall configured - Local services bridged, internet blocked"
 }
 
 # Function to start services
@@ -852,6 +972,7 @@ main() {
     configure_dnsmasq || error_exit "dnsmasq configuration failed"
     configure_hostapd || error_exit "hostapd configuration failed"
     configure_firewall || error_exit "Firewall configuration failed"
+    configure_nginx_ap || error_exit "nginx AP proxy configuration failed"
     optimize_dns_resolution || error_exit "DNS optimization failed"
     start_services || error_exit "Service startup failed"
     
@@ -891,14 +1012,18 @@ main() {
         log "🌍 Country: IT"
         log "🔒 Network Type: Hidden (SSID not broadcasted)"
         log ""
-        log "📱 Local Services Access:"
-        log "=========================="
-        log "📊 Swagger API (Online): http://$AP_IP:8080/docs"
-        log "📋 API Documentation (Offline): http://$AP_IP:8080/docs-offline"
-        log "🖥️  Main Service: http://$AP_IP:8080"
-        log "🖨️  Mainsail: http://$AP_IP"
+        log "📱 Local Services Access (via nginx port 80):"
+        log "============================================="
+        log "�️  Mainsail:            http://$AP_IP/"
+        log "�📊 Swagger UI:          http://$AP_IP/docs"
+        log "�️  G2-Service API:      http://$AP_IP/g2/"
+        log "🔧 Moonraker API:       http://$AP_IP/api"
+        log "🔌 Moonraker WebSocket: ws://$AP_IP/websocket"
+        log ""
+        log "Direct ports (also accessible):"
+        log "🖥️  G2-Service FastAPI:  http://$AP_IP:8080"
+        log "� Moonraker:           http://$AP_IP:7125"
         log "🔗 DNS Names: mainsail.local, api.local, g2.local"
-        log "📊 Network API: http://$AP_IP:8080/api/wifi/status"
         log ""
         log "🔒 Internet access is BLOCKED - Only local services available"
         log ""
@@ -907,7 +1032,7 @@ main() {
         log "1. Connect a device to the network '$ssid'"
         log "2. Use the password: $password"
         log "3. You should get an IP address in the range 192.168.4.2-192.168.4.20"
-        log "4. Test connectivity by accessing http://$AP_IP:8080/docs"
+        log "4. Test connectivity by accessing http://$AP_IP/"
         log ""
         log "📄 Credentials saved to: $CREDENTIALS_FILE"
         log "📝 Log file: $LOG_FILE"
