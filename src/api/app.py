@@ -309,32 +309,4 @@ def create_app(config_path: str = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to get Access Point info: {str(e)}")
     
-    @app.post("/api/access-point/hide")
-    async def hide_access_point():
-        """
-        Hide the wlan0 Access Point (stop broadcasting)
-        
-        Returns:
-            Operation result with status and details
-        """
-        try:
-            result = network_manager.hide_wlan0_ap()
-            return result
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to hide Access Point: {str(e)}")
-    
-    @app.post("/api/access-point/show")
-    async def show_access_point():
-        """
-        Show the wlan0 Access Point (start broadcasting)
-        
-        Returns:
-            Operation result with status and details
-        """
-        try:
-            result = network_manager.show_wlan0_ap()
-            return result
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to show Access Point: {str(e)}")
-    
     return app

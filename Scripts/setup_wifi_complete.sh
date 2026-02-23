@@ -30,6 +30,9 @@ AP_IP="192.168.4.1"
 AP_NETMASK="255.255.255.0"
 AP_NETWORK="192.168.4.0/24"
 
+# Set to "true" to hide the SSID (not broadcasted), "false" to make it visible
+AP_HIDDEN="false"
+
 # Logging function
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -317,7 +320,7 @@ ieee80211ax=0
 wmm_enabled=1
 macaddr_acl=0
 auth_algs=1
-ignore_broadcast_ssid=1
+ignore_broadcast_ssid=$([ "$AP_HIDDEN" = "true" ] && echo 1 || echo 0)
 wpa=2
 wpa_passphrase=$password
 wpa_key_mgmt=WPA-PSK
@@ -368,7 +371,7 @@ Password: $password
 IP Address: $AP_IP
 Interface: $AP_INTERFACE
 Country: IT
-Network Type: Hidden (SSID not broadcasted)
+Network Type: $([ "$AP_HIDDEN" = "true" ] && echo "Hidden (SSID not broadcasted)" || echo "Visible (SSID broadcasted)")
 Created: $(date)
 
 Local Services (via nginx on port 80):
@@ -1010,7 +1013,7 @@ main() {
         log "🌐 IP Address: $AP_IP"
         log "📡 Interface: $AP_INTERFACE"
         log "🌍 Country: IT"
-        log "🔒 Network Type: Hidden (SSID not broadcasted)"
+        log "� Network Type: $([ "$AP_HIDDEN" = "true" ] && echo "Hidden (SSID not broadcasted)" || echo "Visible (SSID broadcasted)")"
         log ""
         log "📱 Local Services Access (via nginx port 80):"
         log "============================================="
