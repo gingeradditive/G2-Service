@@ -90,7 +90,7 @@ if "$WIFI_SCRIPT"; then
         cat "$CREDENTIALS_FILE"
         log ""
         log "📱 Connect your tablet/device to the WiFi network"
-        log "📊 Then access: http://192.168.4.1:8000/docs"
+        log "📊 Then access: http://192.168.4.1:8080/docs"
         log ""
     fi
     

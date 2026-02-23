@@ -369,9 +369,9 @@ Network Type: Hidden (SSID not broadcasted)
 Created: $(date)
 
 Local Services:
-- Swagger API (Online): http://$AP_IP:8000/docs
-- API Documentation (Offline): http://$AP_IP:8000/docs-offline
-- Main Service: http://$AP_IP:8000
+- Swagger API (Online): http://$AP_IP:8080/docs
+- API Documentation (Offline): http://$AP_IP:8080/docs-offline
+- Main Service: http://$AP_IP:8080
 - Mainsail: http://$AP_IP
 - DNS Names: mainsail.local, api.local, g2.local
 EOF
@@ -472,8 +472,7 @@ configure_firewall() {
     iptables -A INPUT -i "$AP_INTERFACE" -p udp --dport 67 -j ACCEPT   # DHCP
     iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 80 -j ACCEPT   # HTTP
     iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 443 -j ACCEPT  # HTTPS
-    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 8000 -j ACCEPT # FastAPI/Swagger
-    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 8080 -j ACCEPT # Main Service
+    iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 8080 -j ACCEPT # FastAPI/Swagger/Main Service
     iptables -A INPUT -i "$AP_INTERFACE" -p tcp --dport 7125 -j ACCEPT # Moonraker
     
     # Block internet access from AP (if main interface exists)
@@ -594,6 +593,61 @@ start_services() {
     log "✓ All services started successfully"
 }
 
+# Function to start G2-Service
+start_g2_service() {
+    log "Starting G2-Service for verification..."
+    
+    # Check if G2-Service is already running
+    if pgrep -f "python.*src/main.py" > /dev/null; then
+        log "✓ G2-Service is already running"
+        return 0
+    fi
+    
+    # Check if the service exists
+    if systemctl list-unit-files | grep -q "g2-service.service"; then
+        log "Starting G2-Service via systemctl..."
+        systemctl start g2-service
+        
+        # Wait for service to start
+        sleep 3
+        
+        if systemctl is-active --quiet g2-service; then
+            log "✓ G2-Service started successfully via systemctl"
+            return 0
+        else
+            log "⚠ G2-Service systemctl failed, trying manual start..."
+        fi
+    fi
+    
+    # Try to start manually
+    if [ -f "/home/pi/G2-Service/src/main.py" ]; then
+        log "Starting G2-Service manually..."
+        
+        # Check if virtual environment exists
+        if [ -d "/home/pi/G2-Service/venv" ]; then
+            cd /home/pi/G2-Service
+            nohup venv/bin/python src/main.py > /dev/null 2>&1 &
+        else
+            cd /home/pi/G2-Service
+            nohup python3 src/main.py > /dev/null 2>&1 &
+        fi
+        
+        # Wait for service to start
+        sleep 5
+        
+        if pgrep -f "python.*src/main.py" > /dev/null; then
+            log "✓ G2-Service started successfully manually"
+            return 0
+        else
+            log "❌ Failed to start G2-Service"
+            return 1
+        fi
+    else
+        log "❌ G2-Service main.py not found at /home/pi/G2-Service/src/main.py"
+        return 1
+    fi
+}
+
 # Function to verify setup
 verify_setup() {
     log "Step 7: Verifying Access Point setup..."
@@ -651,8 +705,8 @@ verify_setup() {
         ((errors++))
     fi
     
-    # Test FastAPI service (correct port 8000)
-    if timeout 5 curl -s http://"$AP_IP":8000 > /dev/null; then
+    # Test FastAPI service (correct port 8080)
+    if timeout 5 curl -s http://"$AP_IP":8080 > /dev/null; then
         log "✓ FastAPI service accessible"
     else
         log "❌ FastAPI service NOT accessible"
@@ -660,7 +714,7 @@ verify_setup() {
     fi
     
     # Test FastAPI docs specifically
-    if timeout 5 curl -s http://"$AP_IP":8000/docs > /dev/null; then
+    if timeout 5 curl -s http://"$AP_IP":8080/docs > /dev/null; then
         log "✓ Swagger API docs accessible"
     else
         log "❌ Swagger API docs NOT accessible"
@@ -804,6 +858,9 @@ main() {
     log "Waiting for services to stabilize..."
     sleep 10
     
+    # Start G2-Service for verification
+    start_g2_service
+    
     # Verify setup
     if verify_setup; then
         log ""
@@ -812,8 +869,8 @@ main() {
         
         # Final comprehensive test
         log "Running final connectivity test..."
-        if timeout 5 curl -s http://"$AP_IP":8000/docs > /dev/null && \
-           timeout 5 curl -s http://"$AP_IP":8000 > /dev/null; then
+        if timeout 5 curl -s http://"$AP_IP":8080/docs > /dev/null && \
+           timeout 5 curl -s http://"$AP_IP":8080 > /dev/null; then
             log "✅ All services are accessible and working!"
         else
             log "⚠ Some services may need additional configuration"
@@ -835,12 +892,12 @@ main() {
         log ""
         log "📱 Local Services Access:"
         log "=========================="
-        log "📊 Swagger API (Online): http://$AP_IP:8000/docs"
-        log "📋 API Documentation (Offline): http://$AP_IP:8000/docs-offline"
-        log "🖥️  Main Service: http://$AP_IP:8000"
+        log "📊 Swagger API (Online): http://$AP_IP:8080/docs"
+        log "📋 API Documentation (Offline): http://$AP_IP:8080/docs-offline"
+        log "🖥️  Main Service: http://$AP_IP:8080"
         log "🖨️  Mainsail: http://$AP_IP"
         log "🔗 DNS Names: mainsail.local, api.local, g2.local"
-        log "📊 Network API: http://$AP_IP:8000/api/wifi/status"
+        log "📊 Network API: http://$AP_IP:8080/api/wifi/status"
         log ""
         log "🔒 Internet access is BLOCKED - Only local services available"
         log ""
@@ -849,7 +906,7 @@ main() {
         log "1. Connect a device to the network '$ssid'"
         log "2. Use the password: $password"
         log "3. You should get an IP address in the range 192.168.4.2-192.168.4.20"
-        log "4. Test connectivity by accessing http://$AP_IP:8000/docs"
+        log "4. Test connectivity by accessing http://$AP_IP:8080/docs"
         log ""
         log "📄 Credentials saved to: $CREDENTIALS_FILE"
         log "📝 Log file: $LOG_FILE"
