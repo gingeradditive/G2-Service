@@ -271,15 +271,70 @@ def create_app(config_path: str = None) -> FastAPI:
     @app.get("/api/access-point/info")
     async def get_access_point_info():
         """
-        Get Access Point testing information
+        Get Access Point testing information and status
         
         Returns:
-            Access Point configuration and testing steps
+            Access Point configuration, testing steps, and current status
         """
         try:
             info = get_ap_testing_info()
+            
+            # Add real-time AP status check
+            try:
+                ap_status = network_manager.get_wlan0_ap_status()
+                info["ap_status"] = ap_status
+                
+                # Update available status based on real AP status
+                if ap_status.get("status") == "working":
+                    info["available"] = True
+                    info["status_message"] = "Access Point is working correctly"
+                elif ap_status.get("status") == "active":
+                    info["available"] = True
+                    info["status_message"] = "Access Point is active"
+                elif ap_status.get("status") == "inactive":
+                    info["available"] = False
+                    info["status_message"] = "Access Point is inactive"
+                else:
+                    info["available"] = False
+                    info["status_message"] = f"Access Point status: {ap_status.get('status', 'unknown')}"
+                    
+            except Exception as e:
+                info["ap_status"] = {
+                    "status": "error",
+                    "message": f"Failed to check AP status: {str(e)}"
+                }
+                info["status_message"] = "Could not determine AP status"
+            
             return info
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to get Access Point info: {str(e)}")
+    
+    @app.post("/api/access-point/hide")
+    async def hide_access_point():
+        """
+        Hide the wlan0 Access Point (stop broadcasting)
+        
+        Returns:
+            Operation result with status and details
+        """
+        try:
+            result = network_manager.hide_wlan0_ap()
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to hide Access Point: {str(e)}")
+    
+    @app.post("/api/access-point/show")
+    async def show_access_point():
+        """
+        Show the wlan0 Access Point (start broadcasting)
+        
+        Returns:
+            Operation result with status and details
+        """
+        try:
+            result = network_manager.show_wlan0_ap()
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to show Access Point: {str(e)}")
     
     return app

@@ -6,6 +6,7 @@ import subprocess
 import json
 import logging
 import time
+import os
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 
@@ -755,5 +756,281 @@ class NetworkManager:
                 "success": False,
                 "ssid": ssid,
                 "message": f"Forget operation failed: {str(e)}",
+                "status": "error"
+            }
+    
+    def _check_wlan0_availability(self):
+        """Check if wlan0 interface is available"""
+        try:
+            # Check if wlan0 interface exists
+            result = subprocess.run(
+                ["/sbin/ip", "link", "show", "wlan0"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    
+    def get_wlan0_ap_status(self) -> Dict:
+        """
+        Check if wlan0 Access Point is working
+        
+        Returns:
+            Dictionary with AP status information
+        """
+        try:
+            logger.info("Checking wlan0 Access Point status...")
+            
+            # Check if wlan0 interface exists
+            if not self._check_wlan0_availability():
+                return {
+                    "interface_available": False,
+                    "ap_active": False,
+                    "status": "interface_not_found",
+                    "message": "wlan0 interface not found"
+                }
+            
+            ap_status = {
+                "interface_available": True,
+                "ap_active": False,
+                "status": "unknown",
+                "interface": "wlan0",
+                "ip_address": None,
+                "mode": None,
+                "clients": []
+            }
+            
+            # Check if interface is up and has IP address
+            try:
+                output = self._run_command(["/sbin/ip", "addr", "show", "wlan0"])
+                
+                # Check if interface is UP
+                if "UP" in output:
+                    ap_status["interface_up"] = True
+                else:
+                    ap_status["interface_up"] = False
+                
+                # Get IP address
+                for line in output.split('\n'):
+                    if "inet " in line and "inet6" not in line:
+                        ip_part = line.split("inet ")[1].split()[0]
+                        if "/" in ip_part:
+                            ap_status["ip_address"] = ip_part.split("/")[0]
+                            break
+                
+            except Exception as e:
+                logger.warning(f"Failed to get wlan0 interface details: {str(e)}")
+            
+            # Check if hostapd is running (Access Point daemon)
+            try:
+                output = self._run_command(["/usr/bin/pgrep", "-f", "hostapd"])
+                if output.strip():
+                    ap_status["hostapd_running"] = True
+                    ap_status["ap_active"] = True
+                    ap_status["status"] = "active"
+                else:
+                    ap_status["hostapd_running"] = False
+                    ap_status["status"] = "inactive"
+            except Exception as e:
+                logger.warning(f"Failed to check hostapd status: {str(e)}")
+                ap_status["hostapd_running"] = False
+            
+            # Try to get AP mode information
+            try:
+                output = self._run_command(["/sbin/iwconfig", "wlan0"])
+                if "Mode:Master" in output:
+                    ap_status["mode"] = "Master"
+                    ap_status["ap_active"] = True
+                elif "Mode:Ad-Hoc" in output:
+                    ap_status["mode"] = "Ad-Hoc"
+                else:
+                    ap_status["mode"] = "Managed"
+            except Exception as e:
+                logger.warning(f"Failed to get wireless mode: {str(e)}")
+            
+            # Check for connected clients (basic check)
+            try:
+                if ap_status["ap_active"] and ap_status["ip_address"]:
+                    # Try to get ARP table for connected clients
+                    output = self._run_command(["/usr/sbin/arp", "-n"])
+                    clients = []
+                    for line in output.split('\n'):
+                        if line.strip() and ap_status["ip_address"].split('.')[0:3] == ['192', '168', '4']:
+                            parts = line.split()
+                            if len(parts) >= 3 and parts[0] != ap_status["ip_address"]:
+                                clients.append({
+                                    "ip": parts[0],
+                                    "mac": parts[2] if len(parts) > 2 else "unknown"
+                                })
+                    ap_status["clients"] = clients
+            except Exception as e:
+                logger.warning(f"Failed to get client information: {str(e)}")
+            
+            # Final status determination
+            if ap_status["interface_available"] and ap_status["ap_active"] and ap_status["ip_address"]:
+                ap_status["status"] = "working"
+                ap_status["message"] = "Access Point is working correctly"
+            elif ap_status["interface_available"] and not ap_status["ap_active"]:
+                ap_status["status"] = "inactive"
+                ap_status["message"] = "Access Point is not active"
+            else:
+                ap_status["status"] = "not_working"
+                ap_status["message"] = "Access Point is not working properly"
+            
+            logger.info(f"wlan0 AP status: {ap_status['status']}")
+            return ap_status
+            
+        except Exception as e:
+            logger.error(f"Failed to check wlan0 AP status: {str(e)}")
+            return {
+                "interface_available": False,
+                "ap_active": False,
+                "status": "error",
+                "message": f"Failed to check AP status: {str(e)}"
+            }
+    
+    def hide_wlan0_ap(self) -> Dict:
+        """
+        Hide the wlan0 Access Point (stop broadcasting)
+        
+        Returns:
+            Dictionary with operation result
+        """
+        try:
+            logger.info("Attempting to hide wlan0 Access Point...")
+            
+            # Check current status first
+            current_status = self.get_wlan0_ap_status()
+            
+            if not current_status["interface_available"]:
+                return {
+                    "success": False,
+                    "message": "wlan0 interface not available",
+                    "status": "interface_not_found"
+                }
+            
+            if not current_status["ap_active"]:
+                return {
+                    "success": True,
+                    "message": "Access Point is already hidden/inactive",
+                    "status": "already_hidden"
+                }
+            
+            # Stop hostapd service
+            try:
+                self._run_command(["sudo", "systemctl", "stop", "hostapd"], use_sudo=True)
+                logger.info("hostapd service stopped")
+            except Exception as e:
+                logger.warning(f"Failed to stop hostapd service: {str(e)}")
+            
+            # Alternative: kill hostapd process
+            try:
+                self._run_command(["sudo", "pkill", "-f", "hostapd"], use_sudo=True)
+                logger.info("hostapd process killed")
+            except Exception as e:
+                logger.warning(f"Failed to kill hostapd process: {str(e)}")
+            
+            # Wait a moment and verify
+            import time
+            time.sleep(2)
+            
+            new_status = self.get_wlan0_ap_status()
+            
+            if not new_status["ap_active"]:
+                logger.info("Successfully hid wlan0 Access Point")
+                return {
+                    "success": True,
+                    "message": "Access Point successfully hidden",
+                    "status": "hidden",
+                    "previous_status": current_status["status"]
+                }
+            else:
+                logger.error("Failed to hide Access Point")
+                return {
+                    "success": False,
+                    "message": "Failed to hide Access Point",
+                    "status": "still_active"
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to hide wlan0 AP: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Failed to hide Access Point: {str(e)}",
+                "status": "error"
+            }
+    
+    def show_wlan0_ap(self) -> Dict:
+        """
+        Show the wlan0 Access Point (start broadcasting)
+        
+        Returns:
+            Dictionary with operation result
+        """
+        try:
+            logger.info("Attempting to show wlan0 Access Point...")
+            
+            # Check current status first
+            current_status = self.get_wlan0_ap_status()
+            
+            if not current_status["interface_available"]:
+                return {
+                    "success": False,
+                    "message": "wlan0 interface not available",
+                    "status": "interface_not_found"
+                }
+            
+            if current_status["ap_active"]:
+                return {
+                    "success": True,
+                    "message": "Access Point is already active",
+                    "status": "already_active"
+                }
+            
+            # Start hostapd service
+            try:
+                self._run_command(["sudo", "systemctl", "start", "hostapd"], use_sudo=True)
+                logger.info("hostapd service started")
+            except Exception as e:
+                logger.warning(f"Failed to start hostapd service: {str(e)}")
+                # Try alternative method
+                try:
+                    # Check if hostapd config exists and start manually
+                    config_file = "/etc/hostapd/hostapd.conf"
+                    if os.path.exists(config_file):
+                        self._run_command(["sudo", "hostapd", "-B", config_file], use_sudo=True)
+                        logger.info("hostapd started manually")
+                except Exception as e2:
+                    logger.warning(f"Failed to start hostapd manually: {str(e2)}")
+            
+            # Wait a moment and verify
+            import time
+            time.sleep(3)
+            
+            new_status = self.get_wlan0_ap_status()
+            
+            if new_status["ap_active"]:
+                logger.info("Successfully showed wlan0 Access Point")
+                return {
+                    "success": True,
+                    "message": "Access Point successfully started",
+                    "status": "active",
+                    "previous_status": current_status["status"]
+                }
+            else:
+                logger.error("Failed to start Access Point")
+                return {
+                    "success": False,
+                    "message": "Failed to start Access Point",
+                    "status": "still_inactive"
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to show wlan0 AP: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Failed to start Access Point: {str(e)}",
                 "status": "error"
             }
