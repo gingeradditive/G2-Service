@@ -4,6 +4,18 @@
 > [01 — Panoramica](01-panoramica.md#ambito-scope)) — questo file resta documentazione, non un
 > via libera a scrivere codice.
 
+## Stato dei prerequisiti (verificato il 2026-07-31)
+
+- **`gingeradditive/G2-Printers` non esiste ancora** — va creato prima di poter implementare
+  qualsiasi cosa di questo capitolo.
+- Il precedente è **`gingeradditive/G1-Configs`** (pubblico): contiene un *unico* set di
+  configurazioni condiviso da tutte le G1, non una cartella per macchina. `G2-Printers`
+  introduce quindi un modello nuovo, non un'evoluzione diretta di quello. Contiene anche
+  `moonraker.conf` e `mainsail.cfg`, il che apre il problema descritto in Q19 di
+  [Q&A.md](Q&A.md).
+- `gingeradditive/G2-Service` è **pubblico**: la logica di autenticazione con `GITHUB_TOKEN`/SSH
+  nel modulo `69-G2-Service` di G2-OS è di fatto inutilizzata.
+
 ## Contesto
 
 Le configurazioni Klipper/Kalico di ogni stampante (tutto ciò che oggi vive in
