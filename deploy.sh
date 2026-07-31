@@ -1,1 +1,0 @@
-/Users/giacomoguaresi/Source/GingerRepos/G2-Service/Scripts/deploy.sh

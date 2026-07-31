@@ -35,8 +35,5 @@ dist/
 .pytest_cache/
 htmlcov/
 
-# --- Custom project paths ---
-Configs/printer.cfg
-out/
-navi.json
-printer.cfg
+# macOS
+.DS_Store
