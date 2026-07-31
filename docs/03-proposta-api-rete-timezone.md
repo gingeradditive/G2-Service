@@ -19,11 +19,8 @@
   [01 — Panoramica](01-panoramica.md).
 - Errori di validazione nel formato di default FastAPI: `{"detail": [{"loc", "msg", "type"}]}`
   — è già il formato che GingerView si aspetta (`HTTPValidationError` in `wifi.ts`).
-- **Attenzione a un'incoerenza già presente nel contratto atteso da GingerView**: i tipi WiFi
-  usano `snake_case` (`signal_strength`, `is_hidden`), i tipi timezone usano `camelCase`
-  (`ntpSynchronized`). Non è qualcosa che possiamo correggere unilateralmente senza toccare
-  GingerView — va deciso consapevolmente se uniformare (e su quale convenzione) o accettare
-  l'inconsistenza perché già "cablata" nei due client.
+- **Attenzione a un'incoerenza già presente nel contratto atteso da GingerView** (`snake_case`
+  WiFi vs `camelCase` timezone) — Q1 in [Q&A.md](Q&A.md).
 
 ---
 
@@ -42,14 +39,10 @@
 **Nota — `adapter.type` come discriminante wifi/wired.** GingerView deriva già `isWired` dal
 campo `adapter.type` della risposta di `GET /api/wifi/status` (`connectionType.toLowerCase()
 !== 'wifi'`), nonostante il path si chiami `/api/wifi/status`. In pratica quell'endpoint è già
-pensato per essere uno **stato di rete generico**, non solo WiFi — vedi punto 3.
+pensato per essere uno **stato di rete generico**, non solo WiFi — vedi punto 3 e Q3 in
+[Q&A.md](Q&A.md).
 
-**Domanda aperta — modalità Access Point per il primo setup.** La versione precedente (rimossa,
-vedi [02 — Architettura](02-architettura.md#stato-attuale)) esponeva un Access Point su
-un'interfaccia dedicata per configurare il WiFi la prima volta, senza rete disponibile. Va
-deciso se questo flusso di onboarding serve ancora nello scope attuale o se si assume che il
-Raspberry Pi abbia sempre un modo di essere raggiunto (es. Ethernet) per la prima
-configurazione.
+**Domanda aperta — modalità Access Point per il primo setup**: Q2 in [Q&A.md](Q&A.md).
 
 ## 2. Ethernet
 
@@ -92,8 +85,6 @@ zona nota al sistema (es. che esista `/usr/share/zoneinfo/<timezone>`).
 
 - **Vincolante per compatibilità immediata con GingerView**: i 6 endpoint 🔗 (4 WiFi + 2
   timezone), con la forma dati esatta già definita nei tipi TypeScript del client.
-- **Da decidere prima di scrivere codice**: le tre domande aperte sopra (naming
-  snake_case/camelCase, Access Point per il first-setup, `/api/wifi/status` vs
-  `/api/network/status`).
+- **Da decidere prima di scrivere codice**: le domande aperte in [Q&A.md](Q&A.md).
 - **Da valutare se servono davvero**: rescan esplicito, reti salvate/dimentica, stato Ethernet
   dedicato — nessuna è richiesta da un consumer esistente oggi.
