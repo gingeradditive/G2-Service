@@ -11,21 +11,173 @@ Raspberry Pi 4 (G2-OS)
 ├── GingerView       interfaccia utente della macchina (SPA statica) — sostituisce
 │                     integralmente Mainsail, parla con Moonraker e con G2-Service, non
 │                     con Kalico direttamente
-├── Nginx            reverse proxy, punto d'ingresso unico
-└── G2-Service       questo progetto — API per rete e timezone dell'host
+├── Crowsnest        streaming webcam (occupa la porta 8080 in locale)
+├── Nginx            reverse proxy, punto d'ingresso unico sulla porta 80
+└── G2-Service       questo progetto — API di sistema dell'host (porta 8000)
 ```
 
-G2-Service non ha dipendenze verso Kalico/Moonraker/GingerView e viceversa: comunica
-direttamente con il sistema operativo del Raspberry Pi (NetworkManager, `timedatectl`, ...),
-non con la stampante.
+G2-Service non dipende da Kalico e non viene richiamato da nessuno degli altri componenti:
+comunica direttamente con il sistema operativo del Raspberry Pi (NetworkManager,
+`timedatectl`, ...). **Una dipendenza verso Moonraker esiste**, in una sola direzione e per un
+solo scopo: dopo aver sincronizzato le configurazioni, G2-Service chiede a Moonraker di
+riavviare Kalico (vedi [04](04-proposta-api-configurazioni.md#applicazione-e-riavvio)).
 
 ## Stack tecnico
 
 | Livello | Tecnologia |
 |---|---|
+| Linguaggio | Python 3.11 (quello di Raspberry Pi OS Bookworm) |
 | Framework | [FastAPI](https://fastapi.tiangolo.com/) |
 | Server ASGI | [uvicorn](https://www.uvicorn.org/) |
-| Documentazione API | Swagger UI (`/docs`) e ReDoc (`/redoc`), generati automaticamente da FastAPI a partire dallo schema OpenAPI |
+| Documentazione API | Swagger UI e ReDoc generati da FastAPI, esposti sotto il prefisso `/service` (vedi sotto) |
+| Client HTTP (verso GitHub) | `httpx` |
+| Qualità | `ruff` per lint e formattazione, `pytest` per i test |
+
+## Convenzioni comuni a tutte le API
+
+Valgono per ogni endpoint, in [03](03-proposta-api-rete-timezone.md) e in
+[04](04-proposta-api-configurazioni.md).
+
+### Prefisso `/service`
+
+**Tutti** gli endpoint stanno sotto `/service/…`, Swagger incluso
+(`/service/docs`, `/service/redoc`, `/service/openapi.json`).
+
+Il motivo è il routing nginx: `/api/`, `/printer/`, `/machine/`, `/server/` e `/access/`
+appartengono a **Moonraker**, che li riceve tramite una `location` regex nel site nginx. Usare
+`/api/…` costringerebbe ad aggiungere un'eccezione `^~` per ogni namespace di G2-Service, in un
+file che vive in un altro repository. Con un prefisso tutto nostro basta **una sola** regola
+nginx, valida per sempre (vedi [05](05-deploy-e-sviluppo.md#nginx)).
+
+> ⚠️ `/service/` (nostro) e `/server/` (Moonraker) si assomigliano molto. Chi mette mano alla
+> configurazione nginx deve fare attenzione a non confonderli: sono due destinazioni diverse.
+
+### Nessun versionamento nell'URL
+
+Niente `/service/v1/…`. L'unico client è GingerView, aggiornato insieme al servizio sulla
+stessa macchina: versionare sarebbe sovrastruttura. Se un giorno un client esterno
+(GingerSlicer) dovesse dipendere dal contratto, si valuterà allora.
+
+### `camelCase` in tutti i corpi JSON
+
+Richieste e risposte usano `camelCase` (`signalStrength`, `ntpSynchronized`), mai `snake_case`.
+
+### Nessuna autenticazione
+
+Coerente con Moonraker su G2-OS, che gira senza auth sulla stessa macchina.
+
+### Modello degli errori
+
+Due forme distinte, entrambe sotto la chiave `detail` (il default di FastAPI):
+
+**1. Errori di validazione** — generati automaticamente da FastAPI, HTTP `422`:
+
+```json
+{ "detail": [ { "loc": ["body", "timezone"], "msg": "...", "type": "..." } ] }
+```
+
+**2. Errori applicativi** — sollevati da noi, con un codice stabile leggibile dal client:
+
+```json
+{ "detail": { "code": "SYSTEM_TOOL_UNAVAILABLE", "message": "nmcli non disponibile" } }
+```
+
+Quando usare quale codice HTTP:
+
+| HTTP | `code` | Quando |
+|---|---|---|
+| 400 | `INVALID_INPUT` | Input sintatticamente valido ma non accettabile (es. timezone inesistente) |
+| 404 | `NOT_FOUND` | La risorsa indicata non esiste (rete salvata, job) |
+| 409 | `CONFLICT` | Un'operazione dello stesso tipo è già in corso |
+| 502 | `UPSTREAM_UNAVAILABLE` | Un servizio esterno non risponde (GitHub) |
+| 503 | `SYSTEM_TOOL_UNAVAILABLE` | Un comando di sistema manca o NetworkManager è giù |
+| 500 | `INTERNAL_ERROR` | Tutto il resto (bug) |
+
+**Gli esiti negativi previsti di un'operazione non sono errori HTTP.** Una password WiFi
+sbagliata non è un 4xx: l'operazione è stata accettata ed eseguita correttamente, ha solo dato
+esito negativo. Siccome le operazioni lunghe sono asincrone (sotto), quell'esito arriva come
+`status: "failed"` del job, con un proprio codice: `WIFI_AUTH_FAILED`,
+`WIFI_NETWORK_NOT_FOUND`, `WIFI_TIMEOUT`, `CONFIG_SERIAL_NOT_SET`, `CONFIG_SERIAL_NOT_FOUND`,
+`CONFIG_DOWNLOAD_FAILED`, `CONFIG_RESTART_FAILED`.
+
+### Operazioni lunghe: modello a job asincroni
+
+Le operazioni che possono superare qualche secondo **non** rispondono in modo sincrono.
+Restituiscono `202 Accepted` con l'identificativo di un job, e il client segue l'avanzamento
+interrogandolo.
+
+Sono asincrone: `POST /service/network/wifi/connect`,
+`POST /service/network/wifi/disconnect`, `POST /service/config/sync`.
+Tutto il resto (letture di stato, scansioni, timezone, rescan, dimentica rete) è sincrono.
+
+Il motivo non è solo la durata. Connettersi a una rete WiFi **cambia l'indirizzo IP della
+macchina**: la connessione HTTP su cui è arrivata la richiesta cade prima che una risposta
+sincrona possa tornare indietro. Il client non saprebbe mai com'è andata. Con un job, il
+client si riconnette al nuovo indirizzo e legge l'esito.
+
+```
+POST /service/network/wifi/connect      →  202  { "jobId": "...", "type": "wifi.connect",
+                                                  "status": "running", "startedAt": "..." }
+
+GET  /service/jobs/{jobId}              →  200  { "jobId": "...", "type": "wifi.connect",
+                                                  "status": "succeeded",
+                                                  "startedAt": "...", "finishedAt": "...",
+                                                  "result": { ... } }
+```
+
+- `status`: `running` | `succeeded` | `failed`.
+- In caso di fallimento: `"error": { "code": "WIFI_AUTH_FAILED", "message": "..." }`.
+- I job vivono **in memoria**, con scadenza dopo un'ora: non serve persistenza, e dopo un
+  riavvio del servizio l'unica cosa che conta è lo stato reale del sistema, interrogabile con
+  gli endpoint di stato.
+- Un solo job per tipo alla volta: una seconda richiesta dello stesso tipo mentre la prima è
+  in corso riceve `409 CONFLICT`.
+- `GET /service/jobs/{jobId}` su un id sconosciuto o scaduto: `404 NOT_FOUND`.
+
+## Privilegi ed esecuzione
+
+Il servizio gira **come root**. Le operazioni che deve compiere (modificare connessioni
+NetworkManager, `timedatectl set-timezone`, scrivere in `/etc/g2/`, scrivere nella cartella
+delle configurazioni) richiedono privilegi, e una whitelist `sudoers` che le coprisse tutte
+sarebbe lunga, fragile e da mantenere allineata in G2-OS.
+
+È un compromesso consapevole, non una scelta indolore: un'API **senza autenticazione**, in
+ascolto su tutte le interfacce, gira con i massimi privilegi. Sulla rete locale di un
+laboratorio è accettabile (Moonraker sulla stessa macchina è già senza auth e può muovere la
+stampante); se un giorno la macchina dovesse essere esposta a una rete non fidata, questa è la
+prima cosa da rivedere.
+
+**Conseguenza pratica da non dimenticare**: i file che G2-Service scrive dentro
+`~/printer_data/` nascerebbero di proprietà di `root`, ma Moonraker gira come utente `pi` e
+deve poterli modificare (l'editor di configurazione di GingerView passa da lì). Ogni file
+scritto sotto `printer_data` va quindi riportato a `pi:pi`.
+
+## Organizzazione del codice
+
+```
+src/
+├── main.py              creazione dell'app, montaggio dei router sotto /service
+├── settings.py          configurazione da variabili d'ambiente (porta, mock, percorsi)
+├── routers/             un modulo per area — solo HTTP: validazione, codici, nessuna logica
+│   ├── health.py
+│   ├── network.py
+│   ├── timezone.py
+│   ├── factory.py       seriale di fabbrica
+│   ├── configs.py       sincronizzazione da G2-Printers
+│   └── jobs.py          stato dei job asincroni
+├── services/            la logica vera; ogni area ha un'implementazione reale e una mock
+│   ├── network/         nmcli
+│   ├── timezone/        timedatectl
+│   ├── configs/         GitHub + filesystem + riavvio via Moonraker
+│   └── jobs.py          esecuzione e registro dei job
+└── models/              schemi Pydantic di richiesta e risposta
+```
+
+La regola che tiene in piedi la struttura: **i router non eseguono comandi di sistema**, si
+limitano a chiamare un servizio. Ogni servizio espone un'interfaccia (un `Protocol`) con due
+implementazioni, quella reale e quella mock, scelte all'avvio in base a `G2_SERVICE_MOCK` e
+iniettate nei router con `Depends`. È ciò che rende il progetto sviluppabile su macOS e
+testabile senza un Raspberry Pi (vedi [05](05-deploy-e-sviluppo.md#modalità-mock)).
 
 ## Stato attuale
 
@@ -34,19 +186,12 @@ Il progetto non è mai arrivato in produzione ed è stato azzerato: la versione 
 committate nel repo) è stata rimossa — resta consultabile nella cronologia git se serve come
 riferimento, ma non va considerata uno stato da cui ripartire.
 
-Oggi il progetto espone un solo endpoint:
+Oggi il progetto espone un solo endpoint, `GET /health`, che al primo giro di sviluppo si
+sposterà sotto il prefisso concordato (`/service/health`, vedi
+[03](03-proposta-api-rete-timezone.md#5-health)).
 
-- `GET /health` — health check
-
-Rete, timezone e configurazioni stampante (vedi
-[01 — Panoramica](01-panoramica.md#ambito-scope)) sono ancora da progettare e implementare.
-
-**Dipendenza futura verso l'esterno.** Con le configurazioni stampante (vedi
-[04](04-proposta-api-configurazioni.md)) G2-Service smetterà di essere autosufficiente
-rispetto al solo Raspberry Pi: dovrà raggiungere GitHub a ogni avvio per sincronizzare i
-config da `G2-Printers`. Non è ancora rappresentato nel diagramma sopra perché non
-implementato — se/quando lo sarà, va anche deciso cosa succede quando GitHub non è
-raggiungibile (rete assente, outage) e la macchina deve comunque avviarsi.
+Tutto il resto — rete, timezone, configurazioni stampante — è progettato ma **non
+implementato**.
 
 ## Struttura del repository
 
@@ -54,8 +199,9 @@ raggiungibile (rete assente, outage) e la macchina deve comunque avviarsi.
 G2-Service/
 ├── README.md
 ├── requirements.txt
+├── rundev.sh          sviluppo locale (anche macOS, con mock) — da scrivere
+├── Scripts/
+│   └── install.sh     installazione e aggiornamento su Raspberry Pi — da scrivere
 ├── docs/
-└── src/
-    ├── __init__.py
-    └── main.py          # app FastAPI + endpoint /health
+└── src/               vedi "Organizzazione del codice"
 ```

@@ -1,105 +1,145 @@
-# 03 — Proposta API: Rete e Timezone
+# 03 — API: Rete e Timezone
 
-> Elenca gli endpoint che G2-Service esporrà per rete (WiFi/Ethernet) e timezone. Naming,
-> convenzioni ed elenco endpoint sono **approvati** (vedi sotto). Nessuno di questi endpoint
-> esiste ancora nel codice (vedi [02 — Architettura](02-architettura.md#stato-attuale)).
-> Domande ancora aperte, se ce ne sono, sono in [Q&A.md](Q&A.md).
+> Contratto **deciso e approvato**, non ancora implementato. Le convenzioni trasversali
+> (prefisso `/service`, `camelCase`, modello degli errori, job asincroni) stanno in
+> [02 — Architettura](02-architettura.md#convenzioni-comuni-a-tutte-le-api) e non si ripetono qui.
 
-## Decisioni prese
+## Hardware su cui si appoggia
 
-- **Prefisso `/api/network/`** per tutto ciò che riguarda la connettività, WiFi ed Ethernet
-  incluse, con sotto-namespace `/api/network/wifi/*` per le operazioni specifiche del WiFi
-  (scansione, connessione — non hanno equivalente su cavo). Lo stato generico vive alla radice
-  (`/api/network/status`) perché copre entrambe le interfacce.
-- **`camelCase` uniforme** su tutti gli endpoint, rete e timezone. Il vecchio contratto WiFi
-  (mai implementato, solo cablato nel client GingerView) usava `snake_case`; si abbandona a
-  favore di `camelCase`, coerente con il contratto timezone e più idiomatico per un'API JSON
-  consumata da un client JS/TS.
-- **GingerView andrà aggiornato di conseguenza** — questi path e questi nomi campo sono
-  diversi da quelli oggi hardcoded in `network-api.ts`/`timezone.ts`. Non è un aggiornamento a
-  costo zero lato client, è una scelta consapevole (vedi [01 — Panoramica](01-panoramica.md#chi-lo-consuma)).
-- Nessuna autenticazione, coerente con Moonraker su G2-OS (che gira senza auth).
-- Errori di validazione nel formato di default FastAPI: `{"detail": [{"loc", "msg", "type"}]}`.
+La G2 ha **un solo adattatore WiFi**, quello integrato del Raspberry Pi 4: `wlan0`. Non c'è
+nessuna chiavetta USB aggiuntiva (il vecchio codice, rimosso, assumeva erroneamente un `wlan1`
+per il client e `wlan0` riservato all'Access Point).
 
-## Legenda
+Due conseguenze importanti:
 
-- ✅ **Approvato** — da implementare.
-- 🔮 **Futuro, non ora** — parte del flusso di onboarding via Access Point (vedi punto 5),
-  esplicitamente rimandato.
+- tutte le operazioni WiFi lavorano su `wlan0`;
+- l'Access Point futuro (punto 6) e la connessione client sono **mutuamente esclusivi**: la
+  stessa interfaccia non può fare entrambe le cose. Mentre l'AP è attivo la macchina non è
+  connessa a nessuna rete e la scansione non è affidabile.
+
+L'interfaccia Ethernet è `eth0`. Entrambi i nomi sono fissi nel codice: sono hardware noto e
+stabile, non serve rilevarli a runtime.
 
 ---
 
 ## 1. Stato di rete (unificato)
 
-| Metodo | Path | Richiesta | Risposta (sintesi) | Stato |
-|---|---|---|---|---|
-| GET | `/api/network/status` | — | `{ adapter: { device, type, state, connection }, ip: { ipv4, ipv6, mac }, signalInfo? }` — `signalInfo` presente solo se `adapter.type === "wifi"` | ✅ |
+| Metodo | Path | Richiesta | Risposta |
+|---|---|---|---|
+| GET | `/service/network/status` | — | vedi sotto |
 
-Sostituisce il vecchio `/api/wifi/status`: un solo endpoint, `adapter.type` (`"wifi"` /
-`"ethernet"`) dice quale interfaccia è attiva, esattamente come GingerView fa già oggi
-derivando `isWired` dallo stesso campo (solo che oggi lo legge da un path che si chiama
-"wifi" per un'interfaccia che può essere anche cablata).
+```json
+{
+  "adapter": { "device": "eth0", "type": "ethernet", "state": "connected", "connection": "Wired connection 1" },
+  "ip": { "ipv4": "192.168.1.42", "ipv6": "...", "mac": "..." },
+  "signalInfo": null,
+  "interfaces": [ { "device": "eth0", "type": "ethernet", "state": "connected" },
+                  { "device": "wlan0", "type": "wifi", "state": "disconnected" } ]
+}
+```
+
+- `adapter` descrive la connessione **attiva**. Se sono attive entrambe, vince l'**Ethernet**:
+  è quella che il sistema usa di default ed è la risposta più utile da mostrare all'utente.
+- Se non c'è **nessuna** connessione, `adapter.state` vale esplicitamente `"disconnected"` (non
+  campi nulli o oggetto assente), `ip` ha i campi a `null` e `connection` a `null`.
+- `signalInfo` (`{ signalStrength, ssid }`) è presente **solo** quando `adapter.type` è
+  `"wifi"`; negli altri casi è `null`.
+- `interfaces` elenca tutte le interfacce note anche quando non sono attive: serve a GingerView
+  per distinguere "non c'è il cavo" da "il cavo c'è ma non prende".
 
 ## 2. WiFi
 
-| Metodo | Path | Richiesta | Risposta (sintesi) | Stato |
+| Metodo | Path | Richiesta | Risposta | Tipo |
 |---|---|---|---|---|
-| GET | `/api/network/wifi/networks` | — | Reti visibili: `{ ssid, signalStrength, security, frequency, isHidden }[]` | ✅ |
-| POST | `/api/network/wifi/connect` | `{ ssid, password? }` | `{ success, ssid, message, status, currentConnection?, previousConnection? }` | ✅ |
-| POST | `/api/network/wifi/disconnect` | — | Stesso shape di `connect` | ✅ |
-| POST | `/api/network/wifi/rescan` | — | Forza una nuova scansione (oggi `scanNetworks()` in GingerView riusa `GET /networks`, non esiste un trigger dedicato) | ✅ |
-| GET | `/api/network/wifi/saved` | — | Reti salvate/configurate in precedenza | ✅ |
-| DELETE | `/api/network/wifi/saved/{ssid}` | — | Dimentica una rete salvata | ✅ |
+| GET | `/service/network/wifi/networks` | — | `{ ssid, signalStrength, security, frequency, isHidden }[]` | sincrono |
+| POST | `/service/network/wifi/rescan` | — | elenco aggiornato, stesso shape di `networks` | sincrono |
+| POST | `/service/network/wifi/connect` | `{ ssid, password? }` | `202` + job | **asincrono** |
+| POST | `/service/network/wifi/disconnect` | — | `202` + job | **asincrono** |
+| GET | `/service/network/wifi/saved` | — | `{ ssid, autoconnect, lastUsed }[]` | sincrono |
+| DELETE | `/service/network/wifi/saved/{ssid}` | — | `204`, oppure `404 NOT_FOUND` | sincrono |
+
+`connect` e `disconnect` restituiscono un job (vedi
+[02 — Operazioni lunghe](02-architettura.md#operazioni-lunghe-modello-a-job-asincroni)): la
+connessione HTTP corrente può cadere perché l'IP della macchina cambia.
+
+**Esiti possibili del job `wifi.connect`**: `succeeded`, oppure `failed` con
+`WIFI_AUTH_FAILED` (password sbagliata), `WIFI_NETWORK_NOT_FOUND` (SSID non trovato in
+scansione), `WIFI_TIMEOUT` (associazione non completata entro il limite).
+
+### Disconnessione e riconnessione automatica
+
+`disconnect` **spegne anche l'autoconnect** della connessione, oltre ad abbassarla. Senza
+questo, NetworkManager si riconnetterebbe da solo dopo pochi secondi e l'utente vedrebbe il
+comando "non funzionare".
+
+Simmetricamente, `connect` **riattiva l'autoconnect** sulla rete a cui ci si connette. La rete
+resta comunque salvata: "disconnetti" non è "dimentica" — per rimuoverla del tutto c'è
+`DELETE /service/network/wifi/saved/{ssid}`.
 
 ## 3. Ethernet
 
-| Metodo | Path | Richiesta | Risposta (sintesi) | Stato |
-|---|---|---|---|---|
-| GET | `/api/network/ethernet/status` | — | Vista dedicata (cavo collegato, IP/MAC, DHCP/statico) | ✅ |
+| Metodo | Path | Richiesta | Risposta |
+|---|---|---|---|
+| GET | `/service/network/ethernet/status` | — | `{ device, cableConnected, state, ip: { ipv4, ipv6, mac }, addressing }` |
 
-Su Raspberry Pi l'Ethernet è tipicamente plug-and-play via DHCP: lo stato unificato (punto 1)
-copre già il caso d'uso noto. Questo endpoint ha senso solo se serve un dettaglio che
-`/api/network/status` non dà (es. per un futuro IP statico via `POST /api/network/ethernet/config`).
+`addressing` vale `"dhcp"` o `"static"`. `cableConnected` riflette lo stato del link fisico
+(distingue "cavo staccato" da "cavo attaccato ma senza IP"), che lo stato unificato del punto 1
+non dà.
+
+Non è previsto un endpoint per impostare un IP statico: se servirà si aggiungerà un
+`POST /service/network/ethernet/config`.
 
 ## 4. Timezone
 
-| Metodo | Path | Richiesta | Risposta (sintesi) | Stato |
-|---|---|---|---|---|
-| GET | `/api/timezone` | — | `{ timezone, ntpSynchronized }` — equivalente a `timedatectl show` | ✅ |
-| POST | `/api/timezone` | `{ timezone }` | Nuovo stato dopo `timedatectl set-timezone <id>` | ✅ |
+| Metodo | Path | Richiesta | Risposta |
+|---|---|---|---|
+| GET | `/service/timezone` | — | `{ timezone, ntpSynchronized }` |
+| POST | `/service/timezone` | `{ timezone }` | Stesso shape, dopo `timedatectl set-timezone` |
 
-Già `camelCase`, nessuna modifica rispetto alla proposta originale. Non serve un endpoint per
-l'elenco dei fusi orari validi: GingerView genera già la lista IANA lato client da `zone.tab`
-di tzdata; la validazione lato server si limita a controllare che l'id ricevuto sia una zona
-nota al sistema (es. che esista `/usr/share/zoneinfo/<timezone>`).
+`ntpSynchronized` è in **sola lettura**. Non esiste un endpoint per abilitare/disabilitare NTP
+o per impostare l'ora a mano: su Raspberry Pi OS la sincronizzazione è attiva di default e il
+Pi non ha un RTC, quindi appena c'è rete l'ora si corregge da sola. Impostare l'ora a mano
+sarebbe utile solo su una macchina permanentemente offline — caso che oggi non esiste. Se
+servirà, si aggiungerà.
 
-## 5. Onboarding di rete (futuro — non ora)
+Un `timezone` non riconosciuto dal sistema (non esiste `/usr/share/zoneinfo/<timezone>`) è
+`400 INVALID_INPUT`. L'elenco delle zone valide **non** viene esposto: GingerView lo genera già
+lato client da `zone.tab` di tzdata.
 
-Non implementato in questa iterazione. Flusso previsto, per quando servirà:
+## 5. Health
 
-1. All'avvio, se nessuna rete WiFi nota (già salvata) è raggiungibile **e** non c'è
-   connessione Ethernet attiva, la macchina apre un proprio Access Point.
-2. Un utente si connette all'AP; GingerView mostra un wizard iniziale di selezione/
-   configurazione rete.
-3. Il wizard è servito da GingerView, ma usa le API di setup/connessione esposte da
-   G2-Service — presumibilmente le stesse di `/api/network/wifi/networks` e `/connect` già
-   proposte sopra, dato che la funzione è la stessa (scegliere una rete e connettersi).
-4. Una volta connessa alla rete scelta, la macchina chiude l'Access Point.
+| Metodo | Path | Richiesta | Risposta |
+|---|---|---|---|
+| GET | `/service/health` | — | vedi sotto |
 
-Procedura standard "vecchio stile" di configurazione rete per dispositivi IoT. Punti da
-chiarire quando si affronterà l'implementazione (non ora):
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "checks": { "networkManager": true, "timedatectl": true, "serialConfigured": false }
+}
+```
 
-- se serve un endpoint esplicito per sapere "sono in modalità AP" (es. un campo `apActive` su
-  `/api/network/status`), utile a GingerView per adattare l'interfaccia;
-- il comportamento hardware — un solo adattatore WiFi che cambia modalità (AP ↔ client) o due
-  interfaccie dedicate come nella versione precedente di G2-Service (rimossa, vedi
-  [02 — Architettura](02-architettura.md#stato-attuale)).
+È il modo in cui GingerView capisce se G2-Service è presente e quale versione parla, ed è utile
+per diagnosticare una macchina da remoto. `status` resta `"ok"` anche se qualche `check` è
+`false`: il servizio è vivo, semplicemente una funzionalità non è disponibile su quella
+macchina. `version` è la versione del pacchetto, la stessa che Moonraker mostra nell'update
+manager.
 
----
+L'endpoint attuale è `GET /health`: va spostato sotto il prefisso `/service` insieme al resto.
 
-## Riepilogo
+## 6. Onboarding di rete (futuro — non ora)
 
-- **Approvati (✅)**: tutti e 10 gli endpoint sopra (stato di rete unificato, WiFi completo con
-  rescan/reti salvate/dimentica, stato Ethernet, timezone) — da implementare con path
-  `/api/network/*` (tranne timezone, che resta `/api/timezone`) e corpi in `camelCase`.
-- **Futuro, esplicitamente non ora (🔮)**: onboarding di rete via Access Point (punto 5).
+Non implementato. Flusso previsto:
+
+1. All'avvio, se nessuna rete WiFi salvata è raggiungibile **e** non c'è connessione Ethernet,
+   la macchina apre un Access Point su `wlan0`.
+2. Un utente si connette all'AP; GingerView mostra un wizard di selezione rete.
+3. Il wizard usa gli stessi endpoint di scansione e connessione già definiti al punto 2.
+4. Connessa la rete scelta, l'AP si chiude.
+
+Con un solo adattatore (vedi sopra) l'AP e la modalità client si escludono a vicenda: passare
+in modalità AP significa staccarsi da qualsiasi rete, e la scansione mentre l'AP è attivo
+richiede attenzioni particolari. Va inoltre aggiunto un modo per sapere che la macchina è in
+modalità AP — presumibilmente un campo `apActive` su `/service/network/status`, così GingerView
+può mostrare il wizard invece della pagina di rete normale.

@@ -28,8 +28,11 @@ G2-Service è il servizio che copre questo spazio: gira sullo stesso Raspberry P
 privilegi necessari per interagire con il sistema operativo (NetworkManager, `timedatectl`,
 ...), ed espone queste funzionalità via API HTTP.
 
-È un progetto **indipendente** da Kalico/Moonraker: non li richiama e non dipende da loro
-per funzionare — sono processi separati sullo stesso host, con responsabilità distinte.
+È un progetto **sostanzialmente indipendente** da Kalico/Moonraker: sono processi separati sullo
+stesso host, con responsabilità distinte, e nessuno di loro chiama G2-Service. L'unica dipendenza
+è in uscita e circoscritta: dopo aver aggiornato le configurazioni, G2-Service chiede a Moonraker
+di riavviare Kalico invece di farlo di nascosto con `systemctl` (vedi
+[04](04-proposta-api-configurazioni.md#applicazione-e-riavvio)).
 
 ## Ambito (scope)
 
@@ -54,7 +57,7 @@ per funzionare — sono processi separati sullo stesso host, con responsabilità
   connette all'AP vede un wizard di selezione/configurazione rete (esposto da GingerView, che
   chiama le API di setup di questo servizio); una volta configurata la rete la macchina si
   connette e chiude l'AP. Procedura standard per dispositivi IoT — non implementata in questa
-  iterazione, vedi [03 — Proposta API](03-proposta-api-rete-timezone.md#5-onboarding-di-rete-futuro--non-ora).
+  iterazione, vedi [03 — API](03-proposta-api-rete-timezone.md#6-onboarding-di-rete-futuro--non-ora).
 
 ## Cosa NON fa
 
@@ -74,10 +77,11 @@ chiama endpoint `/api/wifi/*` in `snake_case`, e la pagina timezone simula
 lettura/scrittura in locale in attesa di un vero `/api/timezone` (vedi la documentazione di
 GingerView, `docs/04-moonraker.md#servizio-di-rete-non-moonraker`).
 
-Il design deciso per G2-Service (vedi [03 — Proposta API](03-proposta-api-rete-timezone.md))
-usa invece prefisso `/api/network/` e `camelCase` uniforme: **GingerView andrà aggiornato in
-coordinamento** con l'implementazione di questi endpoint, non è compatibile "a costo zero"
-con quanto cablato oggi nel client.
+Il design deciso per G2-Service usa invece il prefisso `/service/` e `camelCase` uniforme, con
+le operazioni lunghe modellate come job asincroni: **GingerView andrà aggiornato in
+coordinamento** con l'implementazione di questi endpoint, non è compatibile "a costo zero" con
+quanto è cablato oggi nel client. Le modifiche necessarie sono annotate nel `docs/TODO.md` di
+GingerView.
 
 Nessuno di questi endpoint è ancora implementato in questa iterazione di G2-Service, che
 espone solo `GET /health` (vedi [02 — Architettura](02-architettura.md#stato-attuale)).

@@ -13,7 +13,7 @@ Per il dettaglio su scope e architettura vedi la [documentazione](docs/README.md
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## API
@@ -21,3 +21,7 @@ uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
 - Swagger UI: `/docs`
 - ReDoc: `/redoc`
 - Health check: `GET /health`
+
+> Stato attuale: è implementato **solo** l'endpoint di health. Tutto il resto (rete, timezone,
+> configurazioni) è progettato nella documentazione ma non ancora scritto; quando lo sarà, gli
+> endpoint staranno tutti sotto il prefisso `/service/`.
