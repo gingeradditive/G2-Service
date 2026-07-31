@@ -45,6 +45,12 @@ per funzionare — sono processi separati sullo stesso host, con responsabilità
 - **Configurazioni stampante**: gestione avanzata di parametri macchina che oggi non hanno
   un posto dedicato. Ambito non ancora definito nel dettaglio — da riprendere in un secondo
   momento.
+- **Onboarding di rete via Access Point**: se all'avvio la macchina non trova nessuna rete
+  WiFi nota né una connessione Ethernet, apre un proprio Access Point. Un utente che si
+  connette all'AP vede un wizard di selezione/configurazione rete (esposto da GingerView, che
+  chiama le API di setup di questo servizio); una volta configurata la rete la macchina si
+  connette e chiude l'AP. Procedura standard per dispositivi IoT — non implementata in questa
+  iterazione, vedi [03 — Proposta API](03-proposta-api-rete-timezone.md#5-onboarding-di-rete-futuro--non-ora).
 
 ## Cosa NON fa
 
@@ -57,14 +63,17 @@ Per evitare sovrapposizioni con il resto dello stack:
 
 ## Chi lo consuma
 
-GingerView è il client di riferimento. Il suo servizio
+GingerView è il client di riferimento, ma oggi è ancora fermo al vecchio contratto: il suo
+servizio
 [`network-api.ts`](https://github.com/gingeradditive/GingerView/blob/main/src/lib/services/network-api.ts)
-chiama già un set di endpoint `/api/wifi/*` per rete, e la pagina timezone è predisposta per
-appoggiarsi a un endpoint `/api/timezone` non appena disponibile (nel frattempo simula
-lettura/scrittura in locale — vedi la documentazione di GingerView,
-`docs/04-moonraker.md#servizio-di-rete-non-moonraker`).
+chiama endpoint `/api/wifi/*` in `snake_case`, e la pagina timezone simula
+lettura/scrittura in locale in attesa di un vero `/api/timezone` (vedi la documentazione di
+GingerView, `docs/04-moonraker.md#servizio-di-rete-non-moonraker`).
 
-Questi contratti **non sono ancora implementati** in questa iterazione di G2-Service (che
-espone solo `GET /health`, vedi [02 — Architettura](02-architettura.md#stato-attuale)), ma
-sono un riferimento utile da tenere presente quando si progetteranno gli endpoint di rete e
-timezone, per restare compatibili con l'unico consumer noto.
+Il design deciso per G2-Service (vedi [03 — Proposta API](03-proposta-api-rete-timezone.md))
+usa invece prefisso `/api/network/` e `camelCase` uniforme: **GingerView andrà aggiornato in
+coordinamento** con l'implementazione di questi endpoint, non è compatibile "a costo zero"
+con quanto cablato oggi nel client.
+
+Nessuno di questi endpoint è ancora implementato in questa iterazione di G2-Service, che
+espone solo `GET /health` (vedi [02 — Architettura](02-architettura.md#stato-attuale)).
