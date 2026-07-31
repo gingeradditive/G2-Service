@@ -42,9 +42,13 @@ per funzionare — sono processi separati sullo stesso host, con responsabilità
 
 ### Futuro (non in questa iterazione)
 
-- **Configurazioni stampante**: gestione avanzata di parametri macchina che oggi non hanno
-  un posto dedicato. Ambito non ancora definito nel dettaglio — da riprendere in un secondo
-  momento.
+- **Configurazioni stampante**: i file di configurazione Klipper/Kalico (`printer.cfg` e
+  simili) verranno versionati in un repository GitHub dedicato, `G2-Printers`, una cartella
+  per stampante identificata dal suo seriale. G2-Service dovrà tenerli allineati (controllo
+  automatico a ogni avvio + API per controllo/aggiornamento manuale) ed esporre le API per
+  leggere/scrivere il seriale, impostato da un menu segreto di fabbrica in GingerView. Non
+  implementato in questa iterazione, endpoint ancora da approvare — vedi
+  [04 — Proposta API: Configurazioni](04-proposta-api-configurazioni.md).
 - **Onboarding di rete via Access Point**: se all'avvio la macchina non trova nessuna rete
   WiFi nota né una connessione Ethernet, apre un proprio Access Point. Un utente che si
   connette all'AP vede un wizard di selezione/configurazione rete (esposto da GingerView, che

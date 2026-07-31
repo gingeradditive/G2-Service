@@ -41,6 +41,13 @@ Oggi il progetto espone un solo endpoint:
 Rete, timezone e configurazioni stampante (vedi
 [01 — Panoramica](01-panoramica.md#ambito-scope)) sono ancora da progettare e implementare.
 
+**Dipendenza futura verso l'esterno.** Con le configurazioni stampante (vedi
+[04](04-proposta-api-configurazioni.md)) G2-Service smetterà di essere autosufficiente
+rispetto al solo Raspberry Pi: dovrà raggiungere GitHub a ogni avvio per sincronizzare i
+config da `G2-Printers`. Non è ancora rappresentato nel diagramma sopra perché non
+implementato — se/quando lo sarà, va anche deciso cosa succede quando GitHub non è
+raggiungibile (rete assente, outage) e la macchina deve comunque avviarsi.
+
 ## Struttura del repository
 
 ```

@@ -1,10 +1,9 @@
 # 03 — Proposta API: Rete e Timezone
 
-> Elenca gli endpoint che G2-Service esporrà per rete (WiFi/Ethernet) e timezone. Naming e
-> convenzioni sono **decisi** (vedi sotto); i singoli endpoint 🆕 restano da confermare se
-> servono davvero prima di implementarli. Nessuno di questi endpoint esiste ancora nel codice
-> (vedi [02 — Architettura](02-architettura.md#stato-attuale)). Domande ancora aperte, se ce ne
-> sono, sono in [Q&A.md](Q&A.md).
+> Elenca gli endpoint che G2-Service esporrà per rete (WiFi/Ethernet) e timezone. Naming,
+> convenzioni ed elenco endpoint sono **approvati** (vedi sotto). Nessuno di questi endpoint
+> esiste ancora nel codice (vedi [02 — Architettura](02-architettura.md#stato-attuale)).
+> Domande ancora aperte, se ce ne sono, sono in [Q&A.md](Q&A.md).
 
 ## Decisioni prese
 
@@ -24,9 +23,7 @@
 
 ## Legenda
 
-- ✅ **Necessario** — copre una funzionalità che l'interfaccia di rete/timezone deve avere.
-- 🆕 **Proposta aggiuntiva** — non richiesta da nessuna funzionalità nota oggi, da valutare
-  prima di implementarla.
+- ✅ **Approvato** — da implementare.
 - 🔮 **Futuro, non ora** — parte del flusso di onboarding via Access Point (vedi punto 5),
   esplicitamente rimandato.
 
@@ -50,15 +47,15 @@ derivando `isWired` dallo stesso campo (solo che oggi lo legge da un path che si
 | GET | `/api/network/wifi/networks` | — | Reti visibili: `{ ssid, signalStrength, security, frequency, isHidden }[]` | ✅ |
 | POST | `/api/network/wifi/connect` | `{ ssid, password? }` | `{ success, ssid, message, status, currentConnection?, previousConnection? }` | ✅ |
 | POST | `/api/network/wifi/disconnect` | — | Stesso shape di `connect` | ✅ |
-| POST | `/api/network/wifi/rescan` | — | Forza una nuova scansione (oggi `scanNetworks()` in GingerView riusa `GET /networks`, non esiste un trigger dedicato) | 🆕 |
-| GET | `/api/network/wifi/saved` | — | Reti salvate/configurate in precedenza | 🆕 |
-| DELETE | `/api/network/wifi/saved/{ssid}` | — | Dimentica una rete salvata | 🆕 |
+| POST | `/api/network/wifi/rescan` | — | Forza una nuova scansione (oggi `scanNetworks()` in GingerView riusa `GET /networks`, non esiste un trigger dedicato) | ✅ |
+| GET | `/api/network/wifi/saved` | — | Reti salvate/configurate in precedenza | ✅ |
+| DELETE | `/api/network/wifi/saved/{ssid}` | — | Dimentica una rete salvata | ✅ |
 
 ## 3. Ethernet
 
 | Metodo | Path | Richiesta | Risposta (sintesi) | Stato |
 |---|---|---|---|---|
-| GET | `/api/network/ethernet/status` | — | Vista dedicata (cavo collegato, IP/MAC, DHCP/statico) | 🆕 |
+| GET | `/api/network/ethernet/status` | — | Vista dedicata (cavo collegato, IP/MAC, DHCP/statico) | ✅ |
 
 Su Raspberry Pi l'Ethernet è tipicamente plug-and-play via DHCP: lo stato unificato (punto 1)
 copre già il caso d'uso noto. Questo endpoint ha senso solo se serve un dettaglio che
@@ -102,9 +99,7 @@ chiarire quando si affronterà l'implementazione (non ora):
 
 ## Riepilogo
 
-- **Necessari (✅)**: stato di rete unificato, scansione/connessione/disconnessione WiFi,
-  lettura/scrittura timezone — 6 endpoint, tutti da implementare con path `/api/network/*`
-  (tranne timezone, che resta `/api/timezone`) e corpi in `camelCase`.
-- **Da valutare se servono davvero (🆕)**: rescan esplicito, reti salvate/dimentica, stato
-  Ethernet dedicato.
+- **Approvati (✅)**: tutti e 10 gli endpoint sopra (stato di rete unificato, WiFi completo con
+  rescan/reti salvate/dimentica, stato Ethernet, timezone) — da implementare con path
+  `/api/network/*` (tranne timezone, che resta `/api/timezone`) e corpi in `camelCase`.
 - **Futuro, esplicitamente non ora (🔮)**: onboarding di rete via Access Point (punto 5).
