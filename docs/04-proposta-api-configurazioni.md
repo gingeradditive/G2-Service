@@ -1,16 +1,15 @@
 # 04 — Proposta API: Configurazioni stampante (G2-Printers)
 
-> **Futuro, non in questa iterazione** (vedi [01 — Panoramica](01-panoramica.md#ambito-scope)).
-> Questa è documentazione preparatoria: il design può cambiare quando si deciderà di
-> affrontarlo davvero. A differenza di [03](03-proposta-api-rete-timezone.md), gli endpoint
-> qui sotto **non sono ancora approvati** — restano una proposta di partenza. Domande a cui
-> serve una risposta prima di poter implementare sono in [Q&A.md](Q&A.md) (Q4-Q7).
+> **Design deciso, ma futuro**: non implementare senza una richiesta esplicita separata (vedi
+> [01 — Panoramica](01-panoramica.md#ambito-scope)) — questo file resta documentazione, non un
+> via libera a scrivere codice.
 
 ## Contesto
 
 Le configurazioni Klipper/Kalico di ogni stampante (tutto ciò che oggi vive in
 `printer_data/config/*`: `printer.cfg`, macro, ecc.) verranno **versionate in un repository
-GitHub dedicato**, `G2-Printers`, con una cartella per stampante:
+GitHub dedicato**, `G2-Printers` (**pubblico** — nessuna autenticazione verso GitHub necessaria
+per leggerlo), con una cartella per stampante:
 
 ```
 G2-Printers/
@@ -51,9 +50,9 @@ resto del progetto, che gira senza autenticazione (vedi
 [03 — Decisioni prese](03-proposta-api-rete-timezone.md#decisioni-prese)) — la protezione
 pratica è che il menu in GingerView è nascosto, non che l'API sia bloccata.
 
-**Dove viene persistito il seriale sul Raspberry Pi, e quanto deve sopravvivere** (a un
-riavvio? a un aggiornamento software? a un riflash della SD?) è una domanda aperta — **Q4** in
-[Q&A.md](Q&A.md).
+**Persistenza**: file semplice, `/etc/g2/serial`. Non deve sopravvivere a un riflash della SD —
+in quel caso il seriale va reimpostato a mano dal form segreto (il cliente/tecnico lo fa di
+nuovo, non serve un meccanismo di recupero automatico).
 
 ## 2. Sincronizzazione configurazione
 
@@ -63,10 +62,15 @@ riavvio? a un aggiornamento software? a un riflash della SD?) è una domanda ape
 | POST | `/api/config/check` | — | Stesso shape di `status`, ma forza un fetch verso GitHub prima di rispondere |
 | POST | `/api/config/sync` | — | `{ success, previousVersion, newVersion, filesChanged, restarted, message }` — scarica, applica, riavvia Klipper. È lo stesso percorso eseguito automaticamente a ogni avvio |
 
-`localVersion`/`remoteVersion` presuppongono un modo per stabilire "cosa è più nuovo": se sia
-il commit Git più recente che tocca la cartella della stampante, o un numero di versione
-scritto a mano in un manifest per-stampante, è una domanda aperta — **Q6** in
-[Q&A.md](Q&A.md).
+**Come si determina "più nuovo"**: l'hash del blob Git di ogni file, non un numero di versione
+scritto a mano. L'API GitHub (`GET /repos/gingeradditive/G2-Printers/contents/<seriale>`)
+restituisce, per ogni file nella cartella della stampante, il suo `sha` senza dover scaricare
+il contenuto. G2-Service salva localmente l'ultimo `sha` applicato per ciascun file (es. in
+`/etc/g2/config-version`); a ogni check confronta gli sha remoti con quelli salvati — se anche
+uno solo differisce, `updateAvailable: true`. `localVersion`/`remoteVersion` nella tabella sopra
+sono un riassunto di questo confronto (es. un digest calcolato sull'insieme `path:sha`), non un
+singolo commit dell'intero repository. Il contenuto vero e proprio si scarica solo in fase di
+`sync`, non durante un semplice `check`.
 
 Se `serial` non è ancora configurato (vedi punto 1), questi endpoint rispondono con uno stato
 che lo segnala esplicitamente (niente da sincronizzare senza un'identità).
@@ -78,14 +82,9 @@ All'avvio, se un seriale è configurato, G2-Service esegue automaticamente l'equ
 Questo succede **prima** che l'utente possa interagire con l'interfaccia, quindi non richiede
 un endpoint dedicato — è comportamento interno, non API.
 
-Cosa succede se il download fallisce (rete non disponibile al boot) o se i nuovi file
-mandano in errore Klipper è una domanda aperta — **Q7** in [Q&A.md](Q&A.md): senza un
-meccanismo di rollback, una config online rotta blocca la macchina finché non interviene
-qualcuno manualmente.
-
-## 4. Domande aperte
-
-Prima di poter implementare questa parte servono risposte a **Q4-Q7** in
-[Q&A.md](Q&A.md): dove persistere il seriale in modo duraturo, se `G2-Printers` è pubblico o
-privato (e come G2-Service si autentica verso GitHub se privato), come si definisce "più
-nuovo", e se serve un rollback automatico in caso di config rotta.
+**Nessun rollback automatico** (deciso): se una nuova configurazione manda in errore Klipper,
+la macchina resta ferma finché qualcuno non corregge il problema pubblicando un fix su
+`G2-Printers` — scelta esplicita, per non rischiare che un rollback nasconda il problema. Il
+pulsante "controlla aggiornamenti" previsto in GingerView (chiama `POST /api/config/check` e
+`POST /api/config/sync`, già in tabella al punto 2) è anche lo strumento per forzare un nuovo
+tentativo dopo che il fix è stato pubblicato.

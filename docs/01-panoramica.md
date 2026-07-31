@@ -46,8 +46,8 @@ per funzionare — sono processi separati sullo stesso host, con responsabilità
   simili) verranno versionati in un repository GitHub dedicato, `G2-Printers`, una cartella
   per stampante identificata dal suo seriale. G2-Service dovrà tenerli allineati (controllo
   automatico a ogni avvio + API per controllo/aggiornamento manuale) ed esporre le API per
-  leggere/scrivere il seriale, impostato da un menu segreto di fabbrica in GingerView. Non
-  implementato in questa iterazione, endpoint ancora da approvare — vedi
+  leggere/scrivere il seriale, impostato da un menu segreto di fabbrica in GingerView. Design
+  deciso ma non implementato in questa iterazione — vedi
   [04 — Proposta API: Configurazioni](04-proposta-api-configurazioni.md).
 - **Onboarding di rete via Access Point**: se all'avvio la macchina non trova nessuna rete
   WiFi nota né una connessione Ethernet, apre un proprio Access Point. Un utente che si
