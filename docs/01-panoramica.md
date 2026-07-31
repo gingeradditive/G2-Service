@@ -8,14 +8,14 @@ La **Stampante G2** è una stampante 3D a pellet Ginger, basata su:
   pilota la macchina (motori, temperature, estrusione a pellet) via UART.
 - **[Moonraker](https://github.com/Arksine/moonraker)** — API/websocket server che espone
   Kalico sulla rete (stato macchina, file gcode, macro, update manager).
-- **[Mainsail](https://github.com/mainsail-crew/mainsail)** — interfaccia web "stock" per
-  Moonraker.
-- **GingerView** — interfaccia utente custom (SvelteKit, SPA statica), pensata per essere
-  usata da smartphone, che sostituisce Mainsail come frontend principale.
+- **GingerView** — interfaccia utente della macchina (SvelteKit, SPA statica), pensata per
+  essere usata da smartphone. Sostituisce **integralmente**
+  [Mainsail](https://github.com/mainsail-crew/mainsail): non viene installato affiancato, è
+  l'unico frontend della Stampante G2.
 
 Il tutto gira su **Raspberry Pi 4** con **[G2-OS](https://github.com/gingeradditive/G2-OS)**,
-un fork di MainsailOS che preinstalla e configura Kalico, Moonraker, Mainsail, Crowsnest,
-Sonar e Nginx.
+un fork di MainsailOS che preinstalla e configura Kalico, Moonraker, Crowsnest, Sonar e
+Nginx, con GingerView al posto di Mainsail.
 
 ## Cos'è G2-Service
 
@@ -28,9 +28,8 @@ G2-Service è il servizio che copre questo spazio: gira sullo stesso Raspberry P
 privilegi necessari per interagire con il sistema operativo (NetworkManager, `timedatectl`,
 ...), ed espone queste funzionalità via API HTTP.
 
-È un progetto **indipendente** da Kalico/Moonraker/Mainsail: non li richiama e non dipende
-da loro per funzionare — sono processi separati sullo stesso host, con responsabilità
-distinte.
+È un progetto **indipendente** da Kalico/Moonraker: non li richiama e non dipende da loro
+per funzionare — sono processi separati sullo stesso host, con responsabilità distinte.
 
 ## Ambito (scope)
 
@@ -53,7 +52,7 @@ Per evitare sovrapposizioni con il resto dello stack:
 
 - non parla con la stampante via seriale/UART — è compito di Kalico;
 - non gestisce file gcode, stampe, webcam, update manager — è compito di
-  Moonraker/Mainsail/Crowsnest;
+  Moonraker/Crowsnest;
 - non è un'interfaccia utente — quella è GingerView.
 
 ## Chi lo consuma

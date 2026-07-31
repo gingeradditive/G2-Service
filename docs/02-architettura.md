@@ -8,14 +8,14 @@ Tutto gira sullo stesso Raspberry Pi 4 (G2-OS), come processi separati:
 Raspberry Pi 4 (G2-OS)
 ├── Kalico           firmware (fork Klipper) — comunica con la scheda via UART
 ├── Moonraker        API/websocket per Kalico — stato macchina, file, macro, update manager
-├── Mainsail         interfaccia web stock di Moonraker
-├── GingerView       interfaccia utente custom (SPA statica) — parla con Moonraker e con
-│                     G2-Service, non con Kalico direttamente
+├── GingerView       interfaccia utente della macchina (SPA statica) — sostituisce
+│                     integralmente Mainsail, parla con Moonraker e con G2-Service, non
+│                     con Kalico direttamente
 ├── Nginx            reverse proxy, punto d'ingresso unico
 └── G2-Service       questo progetto — API per rete e timezone dell'host
 ```
 
-G2-Service non ha dipendenze verso Kalico/Moonraker/Mainsail e viceversa: comunica
+G2-Service non ha dipendenze verso Kalico/Moonraker/GingerView e viceversa: comunica
 direttamente con il sistema operativo del Raspberry Pi (NetworkManager, `timedatectl`, ...),
 non con la stampante.
 
