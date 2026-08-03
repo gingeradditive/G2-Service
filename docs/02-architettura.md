@@ -133,6 +133,12 @@ GET  /service/jobs/{jobId}              →  200  { "jobId": "...", "type": "wif
 - Un solo job per tipo alla volta: una seconda richiesta dello stesso tipo mentre la prima è
   in corso riceve `409 CONFLICT`.
 - `GET /service/jobs/{jobId}` su un id sconosciuto o scaduto: `404 NOT_FOUND`.
+- La scadenza si conta **dalla fine**: un job ancora in corso non scade, altrimenti
+  un'operazione lenta perderebbe il proprio risultato proprio mentre lo produce.
+- Un errore applicativo sollevato *dentro* un job non ha nessuna risposta HTTP in cui finire e
+  diventa l'esito negativo del job, conservando il proprio codice: se NetworkManager cade a
+  metà di una connessione il job dice `SYSTEM_TOOL_UNAVAILABLE`, non un generico errore
+  interno.
 
 ## Privilegi ed esecuzione
 
@@ -158,19 +164,26 @@ scritto sotto `printer_data` va quindi riportato a `pi:pi`.
 src/
 ├── main.py              creazione dell'app, montaggio dei router sotto /service
 ├── settings.py          configurazione da variabili d'ambiente (porta, mock, percorsi)
+├── errors.py            eccezioni applicative e traduzione in risposte HTTP
+├── dependencies.py      i `Depends` con cui i router ricevono i servizi
 ├── routers/             un modulo per area — solo HTTP: validazione, codici, nessuna logica
 │   ├── health.py
 │   ├── network.py
 │   ├── timezone.py
-│   ├── factory.py       seriale di fabbrica
-│   ├── configs.py       sincronizzazione da G2-Printers
-│   └── jobs.py          stato dei job asincroni
+│   ├── jobs.py          stato dei job asincroni
+│   ├── factory.py       seriale di fabbrica — parte 2
+│   └── configs.py       sincronizzazione da G2-Printers — parte 2
 ├── services/            la logica vera; ogni area ha un'implementazione reale e una mock
-│   ├── network/         nmcli
+│   ├── container.py     scelta reale/mock all'avvio
+│   ├── system.py        esecuzione dei comandi di sistema: timeout e traduzione degli errori
+│   ├── jobs.py          esecuzione e registro dei job
+│   ├── health/          i check di /service/health
+│   ├── network/         WiFi ed Ethernet
+│   │   └── nmcli.py     comandi e parsing, isolati e verificabili su output finto
 │   ├── timezone/        timedatectl
-│   ├── configs/         GitHub + filesystem + riavvio via Moonraker
-│   └── jobs.py          esecuzione e registro dei job
+│   └── configs/         GitHub + filesystem + riavvio via Moonraker — parte 2
 └── models/              schemi Pydantic di richiesta e risposta
+    └── base.py          `CamelModel`, da cui discendono tutti gli schemi
 ```
 
 La regola che tiene in piedi la struttura: **i router non eseguono comandi di sistema**, si
@@ -179,6 +192,16 @@ implementazioni, quella reale e quella mock, scelte all'avvio in base a `G2_SERV
 iniettate nei router con `Depends`. È ciò che rende il progetto sviluppabile su macOS e
 testabile senza un Raspberry Pi (vedi [05](05-deploy-e-sviluppo.md#modalità-mock)).
 
+Ogni area di servizio è una cartella con la stessa forma — `__init__.py` per il `Protocol`,
+`real.py` e `mock.py` per le due implementazioni. `services/health/` è l'esempio più piccolo e
+fa da modello per le altre. Le implementazioni **non ereditano** dal `Protocol`: la conformità
+è strutturale, ed è `build_services()` in `services/container.py` a dichiarare il tipo che
+restituisce. `container.py` è anche l'unico punto del progetto che sa se si sta girando in mock
+o sul ferro: da lì in poi i router vedono solo interfacce.
+
+Il `camelCase` non si ripete campo per campo: sta nell'alias generator di `CamelModel`
+(`models/base.py`), da cui discendono tutti gli schemi.
+
 ## Stato attuale
 
 Il progetto non è mai arrivato in produzione ed è stato azzerato: la versione precedente
@@ -186,12 +209,18 @@ Il progetto non è mai arrivato in produzione ed è stato azzerato: la versione 
 committate nel repo) è stata rimossa — resta consultabile nella cronologia git se serve come
 riferimento, ma non va considerata uno stato da cui ripartire.
 
-Oggi il progetto espone un solo endpoint, `GET /health`, che al primo giro di sviluppo si
-sposterà sotto il prefisso concordato (`/service/health`, vedi
-[03](03-proposta-api-rete-timezone.md#5-health)).
+Oggi ci sono la struttura descritta in questo documento — prefisso `/service`, modello degli
+errori, infrastruttura dei job asincroni, selezione reale/mock — e **tutti gli endpoint di
+[03](03-proposta-api-rete-timezone.md)**: health, rete (WiFi ed Ethernet) e fuso orario, ognuno
+con la propria implementazione mock. È l'intero scope della parte 1 sul fronte API.
 
-Tutto il resto — rete, timezone, configurazioni stampante — è progettato ma **non
-implementato**.
+C'è anche il deploy: unit systemd, `location` nginx e `Scripts/install.sh` (vedi
+[05](05-deploy-e-sviluppo.md)). Quello che manca è la verifica **sulla macchina vera**: finora
+tutto è stato provato con implementazioni mock e comandi di sistema finti, e il formato reale
+di `nmcli` e `timedatectl` non è ancora stato visto.
+
+Le configurazioni stampante restano progettate ma **non implementate**: la cartella
+`services/configs/` non esiste ancora.
 
 ## Struttura del repository
 
@@ -201,7 +230,10 @@ G2-Service/
 ├── requirements.txt
 ├── rundev.sh          sviluppo locale (anche macOS, con mock) — da scrivere
 ├── Scripts/
-│   └── install.sh     installazione e aggiornamento su Raspberry Pi — da scrivere
+│   ├── install.sh              installazione e aggiornamento su Raspberry Pi
+│   ├── g2-service.service      unit systemd (`__REPO_DIR__` sostituito da install.sh)
+│   └── g2-service.nginx.conf   la `location ^~ /service/` depositata in g2-locations.d/
 ├── docs/
-└── src/               vedi "Organizzazione del codice"
+├── src/               vedi "Organizzazione del codice"
+└── .devdata/          sostituto locale di /etc/g2 e printer_data in sviluppo — non versionato
 ```

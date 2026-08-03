@@ -1,0 +1,28 @@
+[Unit]
+Description=G2-Service — API di sistema della Stampante G2
+Documentation=https://github.com/gingeradditive/G2-Service
+
+# Solo ordinamento, nessun requisito: il servizio deve partire **anche senza rete**. È da
+# GingerView che l'utente configura il WiFi, quindi mettersi in attesa di
+# network-online.target ritarderebbe l'API proprio nel caso in cui serve di più.
+After=network.target NetworkManager.service
+
+[Service]
+Type=simple
+
+# Come root di proposito: modificare le connessioni di NetworkManager, impostare il fuso
+# orario e scrivere in /etc/g2 richiedono privilegi, e una whitelist sudoers che li coprisse
+# tutti sarebbe lunga, fragile e da tenere allineata in G2-OS (docs 02 — Privilegi).
+User=root
+
+WorkingDirectory=__REPO_DIR__
+ExecStart=__REPO_DIR__/venv/bin/uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+# Perché i log arrivino al journal subito e non a blocchi.
+Environment=PYTHONUNBUFFERED=1
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

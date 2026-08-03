@@ -22,6 +22,9 @@ ENV/
 *.bak
 *.old
 
+# Sostituto locale di /etc/g2 e ~/printer_data in sviluppo (vedi src/settings.py)
+.devdata/
+
 # Build / packaging
 build/
 dist/

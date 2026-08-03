@@ -1,7 +1,7 @@
 # 05 — Deploy, aggiornamenti e sviluppo locale
 
-> Design deciso, **non implementato**. Nessuno script esiste ancora nel repo. Va scritto solo su
-> richiesta esplicita.
+> Implementato, tranne `rundev.sh` (che resta da scrivere). L'unit systemd, la `location`
+> nginx e `Scripts/install.sh` sono nel repository, sotto `Scripts/`.
 
 ## Porta e indirizzo
 
@@ -16,6 +16,29 @@ G2-Service ascolta su **`0.0.0.0:8000`**.
   il dev server sul portatile punta alla stampante reale. Nota che l'API non ha autenticazione e
   gira come root (vedi [02 — Privilegi](02-architettura.md#privilegi-ed-esecuzione)): è
   accettabile sulla rete locale di un laboratorio, non su una rete non fidata.
+
+## Configurazione
+
+Tutta da variabili d'ambiente, con default che funzionano senza configurare niente (`src/settings.py`).
+
+| Variabile | Default in produzione | Default in sviluppo |
+|---|---|---|
+| `G2_SERVICE_HOST` | `0.0.0.0` | `0.0.0.0` |
+| `G2_SERVICE_PORT` | `8000` | `8000` |
+| `G2_SERVICE_MOCK` | `0` su Linux | `1` fuori da Linux |
+| `G2_SERVICE_ETC_DIR` | `/etc/g2` | `.devdata/etc/g2` nel repo |
+| `G2_SERVICE_PRINTER_DATA_DIR` | `/home/pi/printer_data` | `.devdata/printer_data` nel repo |
+
+In mock i percorsi di sistema diventano cartelle dentro il repository: sviluppare non richiede
+privilegi e non tocca niente sotto `/etc`.
+
+`/home/pi/printer_data` è scritto per esteso e **non** derivato da `~`: il servizio gira come
+root, quindi `~` sarebbe `/root`, mentre quella cartella appartiene a `pi` (vedi
+[02 — Privilegi](02-architettura.md#privilegi-ed-esecuzione)).
+
+Il prefisso `/service` **non** è configurabile: è una costante di `settings.py`, appaiata alla
+regola nginx qui sotto. Poterlo cambiare da una variabile d'ambiente vorrebbe dire poter
+rompere il routing senza accorgersene.
 
 ## Nginx
 
@@ -85,10 +108,12 @@ repository deve contenerlo, altrimenti la macchina perde la capacità di aggiorn
 ## `Scripts/install.sh`
 
 Invocato alla prima installazione dal modulo
-[`G2-OS/modules/generic/69-G2-Service`](https://github.com/gingeradditive/G2-OS/blob/main/modules/generic/69-G2-Service)
+[`G2-OS/modules/generic/69-G2-Service`](https://github.com/gingeradditive/G2-OS/blob/develop/modules/generic/69-G2-Service)
 come `sudo -u pi bash ./Scripts/install.sh` — gira quindi **come utente `pi`**, con sudo
 passwordless disponibile (default su Raspberry Pi OS). Lo stesso script è poi l'`install_script`
 richiamato da Moonraker a ogni aggiornamento, quindi **deve essere idempotente**.
+
+> Il branch di default di G2-OS è `develop`, non `main`: un link a `blob/main/...` dà 404.
 
 Responsabilità:
 
@@ -107,6 +132,58 @@ Va gestito il caso in cui lo script gira **dentro il chroot di build di G2-OS**,
 In quel contesto l'errore va tollerato e il servizio partirà al primo boot reale grazie a
 `enable` + `WantedBy=multi-user.target`. Lo stesso vale per il reload di nginx.
 
+Il rilevamento non è euristico: si guarda se esiste `/run/systemd/system`, il controllo canonico
+per "systemd è davvero il PID 1" che usano anche i maintainer script di Debian. Quando c'è, un
+`restart` fallito **fa fallire l'installazione** (con le ultime righe di `journalctl` in output);
+quando non c'è, si salta il riavvio dicendolo. Ignorare gli errori in blocco nasconderebbe i
+guasti veri sulla macchina vera.
+
+### Il venv e il pacchetto che non c'è
+
+`python3 -m venv` non funziona su Raspberry Pi OS senza il pacchetto `python3-venv`, e
+**nessun modulo di G2-OS lo installa**: Kalico installa `virtualenv`, e Moonraker si crea il
+proprio venv con `virtualenv -p python3`. Lo script prova quindi prima la libreria standard e
+ripiega su `virtualenv`, che è garantito presente. Così `install.sh` funziona sull'immagine
+attuale senza richiedere nessuna modifica a G2-OS.
+
+Il venv appartiene all'utente che possiede il repository (`pi`), non a root: è come `pi` che
+Moonraker reinstalla le dipendenze a ogni aggiornamento, e un venv di root gli sarebbe
+inaccessibile.
+
+### `DESTDIR`
+
+Tutti i percorsi di sistema passano da `$DESTDIR`, vuoto in produzione, con la convenzione di
+`make install`. Serve a esercitare lo script su una radice finta senza lasciargli toccare la
+macchina — è il modo in cui sono stati verificati il ramo chroot, l'idempotenza e i casi di
+`moonraker.conf`.
+
+### Se manca la riga `include` in nginx
+
+Lo script deposita comunque il proprio file e **avvisa** che finché il site di GingerView non
+include `g2-locations.d/`, `/service/` non è raggiungibile dalla porta 80 (il servizio resta
+raggiungibile sulla 8000). È la modifica annotata come `NET-5` nel TODO di GingerView.
+
+### `moonraker.conf` che è un symlink
+
+Se `moonraker.conf` è un symlink, lo script **non lo tocca** e lo dice: in quel caso il file
+appartiene al repository delle configurazioni (vedi
+[04](04-proposta-api-configurazioni.md#moonrakerconf-è-del-repository)), scriverci sarebbe un
+cambiamento occulto e verrebbe comunque perso alla sincronizzazione successiva. Il blocco
+`[update_manager G2-Service]` deve stare nella copia pubblicata.
+
+## Il modulo `69-G2-Service` di G2-OS
+
+Verificato contro l'`install.sh` attuale: **funziona senza modifiche**. Clona in
+`/home/pi/G2-Service` (che è ciò che l'`update_manager` si aspetta) e invoca lo script come
+utente `pi` dalla radice del repository, cioè esattamente le condizioni su cui è scritto.
+
+Restano due cose che si possono ripulire, nessuna delle quali blocca:
+
+- la logica `GITHUB_TOKEN`/SSH è **codice morto**: `gingeradditive/G2-Service` è pubblico e il
+  clone anonimo funziona;
+- fra le `DEPS` c'è `python3-flask`, un residuo dell'implementazione precedente: oggi il
+  servizio usa FastAPI dentro il venv e non ha bisogno di Flask di sistema.
+
 ## `rundev.sh`
 
 Script alla radice del repo per lo sviluppo locale, pensato per girare **anche su macOS**, senza
@@ -123,6 +200,12 @@ la stessa interfaccia di quella reale (vedi
 [02 — Organizzazione del codice](02-architettura.md#organizzazione-del-codice)) e restituisce dati
 verosimili — un elenco di reti WiFi con segnali diversi, reti protette e aperte, una connessione
 attiva, un fuso orario.
+
+Il mock di rete tiene anche uno **stato**: connettersi cambia davvero ciò che risponde
+`/service/network/status`, disconnettersi spegne l'autoconnect, dimenticare una rete la toglie
+dall'elenco. Il giro completo si sviluppa quindi su macOS esattamente come sulla macchina vera.
+I job finti durano qualche secondo di proposito: se finissero subito, il client non farebbe mai
+in tempo a vederli `running` e quel percorso resterebbe non provato.
 
 Deve poter simulare anche i **fallimenti**, altrimenti serve solo a sviluppare il caso felice
 mentre i casi che rompono l'interfaccia restano non testabili. Una variabile

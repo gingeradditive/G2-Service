@@ -8,5 +8,9 @@
 - [TODO.md](TODO.md) — gli step di sviluppo in ordine, divisi tra implementazione corrente e implementazioni future
 - [Q&A.md](Q&A.md) — solo le domande ancora aperte. Quando una riceve risposta, esce da qui ed entra nella documentazione
 
-Lo stato di implementazione è uno solo: **niente è implementato tranne `GET /health`**. Tutti i
-documenti qui descrivono decisioni prese, non codice esistente.
+Lo stato di implementazione è uno solo: c'è **la struttura trasversale** (prefisso `/service`,
+`camelCase`, modello degli errori, job asincroni, selezione reale/mock) e **tutti gli endpoint
+di [03](03-proposta-api-rete-timezone.md)** — health, rete, fuso orario — **più il deploy**
+(unit systemd, nginx, `install.sh`). Quello che manca è la verifica su una macchina vera: le
+configurazioni stampante ([04](04-proposta-api-configurazioni.md)) sono decisioni prese, non
+codice esistente.

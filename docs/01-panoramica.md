@@ -83,5 +83,5 @@ coordinamento** con l'implementazione di questi endpoint, non è compatibile "a 
 quanto è cablato oggi nel client. Le modifiche necessarie sono annotate nel `docs/TODO.md` di
 GingerView.
 
-Nessuno di questi endpoint è ancora implementato in questa iterazione di G2-Service, che
-espone solo `GET /health` (vedi [02 — Architettura](02-architettura.md#stato-attuale)).
+Gli endpoint di rete e timezone sono implementati, insieme al deploy; manca la verifica su una
+macchina vera (vedi [02 — Architettura](02-architettura.md#stato-attuale)).

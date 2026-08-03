@@ -1,6 +1,7 @@
 # 03 — API: Rete e Timezone
 
-> Contratto **deciso e approvato**, non ancora implementato. Le convenzioni trasversali
+> Contratto **deciso e approvato** e **interamente implementato** (i punti 1-5; il 6 è futuro).
+> Le convenzioni trasversali
 > (prefisso `/service`, `camelCase`, modello degli errori, job asincroni) stanno in
 > [02 — Architettura](02-architettura.md#convenzioni-comuni-a-tutte-le-api) e non si ripetono qui.
 
@@ -19,6 +20,18 @@ Due conseguenze importanti:
 
 L'interfaccia Ethernet è `eth0`. Entrambi i nomi sono fissi nel codice: sono hardware noto e
 stabile, non serve rilevarli a runtime.
+
+## Due trappole di `nmcli`
+
+Valgono per tutti gli endpoint di rete e sono la ragione per cui il wrapper sta in un modulo
+suo (`services/network/nmcli.py`), con le funzioni di parsing pure e verificabili su output
+finto.
+
+1. **`nmcli` è tradotto.** Con `LANG` italiano `device status` stampa `connesso`, e ogni
+   confronto nel codice fallisce. Tutti i comandi girano con `LC_ALL=C`.
+2. **In `--terse` i due punti dentro un valore sono protetti con `\`** (un MAC diventa
+   `B8\:27\:EB\:...`). Uno `split(":")` funziona finché non arriva un SSID con i due punti
+   dentro, e allora sbaglia in silenzio.
 
 ---
 
@@ -47,6 +60,17 @@ stabile, non serve rilevarli a runtime.
 - `interfaces` elenca tutte le interfacce note anche quando non sono attive: serve a GingerView
   per distinguere "non c'è il cavo" da "il cavo c'è ma non prende".
 
+`state` vale `connected`, `connecting`, `disconnected`, `unavailable`, `unmanaged` oppure
+`unknown`. È la distinzione fra `disconnected` e `unavailable` a portare l'informazione che
+serve a GingerView: su Ethernet `unavailable` vuol dire **cavo staccato**, `disconnected` vuol
+dire cavo attaccato ma nessuna connessione attiva. Uno stato che NetworkManager introdurrà in
+futuro diventa `unknown` e non un errore.
+
+**Quale interfaccia finisce in `adapter` quando non c'è niente di connesso.** Si ordina per
+stato — chi è più vicino a essere connesso vince — e a parità di stato passa avanti
+l'Ethernet. Con il cavo staccato (`unavailable`) e il WiFi libero (`disconnected`) l'adapter è
+quindi `wlan0`: è quella su cui l'utente può agire.
+
 ## 2. WiFi
 
 | Metodo | Path | Richiesta | Risposta | Tipo |
@@ -64,13 +88,39 @@ connessione HTTP corrente può cadere perché l'IP della macchina cambia.
 
 **Esiti possibili del job `wifi.connect`**: `succeeded`, oppure `failed` con
 `WIFI_AUTH_FAILED` (password sbagliata), `WIFI_NETWORK_NOT_FOUND` (SSID non trovato in
-scansione), `WIFI_TIMEOUT` (associazione non completata entro il limite).
+scansione), `WIFI_TIMEOUT` (associazione non completata entro il limite). Il `result` di un
+job riuscito è `{ ssid, ip: { ipv4, ipv6, mac } }` per `connect` e
+`{ ssid, alreadyDisconnected }` per `disconnect`.
+
+### Come sono fatti i campi dell'elenco reti
+
+- `security` è `"open"` per le reti senza cifratura, altrimenti la stringa di NetworkManager
+  (`"WPA2"`, `"WPA1 WPA2"`, `"WPA3"`, ...). Un client che deve decidere se chiedere la
+  password controlla `security === "open"`.
+- `frequency` è in MHz (`2412`, `5180`), `null` se non leggibile.
+- Uno stesso SSID compare **una volta sola**, con il segnale migliore: senza questo un elenco
+  da mostrare all'utente conterrebbe una riga per access point, cioè due per ogni rete
+  dual-band e altrettante per ogni ripetitore.
+- Le reti nascoste hanno `ssid: ""` e `isHidden: true`.
+
+### Password e profili salvati
+
+Quando `connect` riceve una `password` e una connessione per quello SSID è già salvata, il
+profilo viene **ricreato**. Non è un dettaglio implementativo evitabile: `nmcli` riuserebbe il
+profilo esistente ignorando la password appena ricevuta, e chi sta correggendo una password
+sbagliata resterebbe bloccato sul vecchio valore senza capire perché. Simmetricamente, un
+tentativo fallito non lascia dietro di sé una rete "salvata" a cui non ci si è mai connessi.
 
 ### Disconnessione e riconnessione automatica
 
 `disconnect` **spegne anche l'autoconnect** della connessione, oltre ad abbassarla. Senza
 questo, NetworkManager si riconnetterebbe da solo dopo pochi secondi e l'utente vedrebbe il
-comando "non funzionare".
+comando "non funzionare". L'ordine dei due passi conta — prima l'autoconnect, poi
+l'abbassamento — perché al contrario NetworkManager fa in tempo a riagganciare nel mezzo.
+
+Per lo stesso motivo si abbassa l'**interfaccia** e non solo la connessione: con la sola
+connessione giù, NetworkManager sarebbe libero di agganciare subito un'altra rete salvata, e
+per l'utente sarebbe come non essersi disconnesso affatto.
 
 Simmetricamente, `connect` **riattiva l'autoconnect** sulla rete a cui ci si connette. La rete
 resta comunque salvata: "disconnetti" non è "dimentica" — per rimuoverla del tutto c'è
@@ -82,9 +132,10 @@ resta comunque salvata: "disconnetti" non è "dimentica" — per rimuoverla del 
 |---|---|---|---|
 | GET | `/service/network/ethernet/status` | — | `{ device, cableConnected, state, ip: { ipv4, ipv6, mac }, addressing }` |
 
-`addressing` vale `"dhcp"` o `"static"`. `cableConnected` riflette lo stato del link fisico
-(distingue "cavo staccato" da "cavo attaccato ma senza IP"), che lo stato unificato del punto 1
-non dà.
+`addressing` vale `"dhcp"` o `"static"`, e `null` quando non c'è una connessione attiva da cui
+leggerlo (a cavo staccato non esiste una risposta vera). `cableConnected` riflette lo stato del
+link fisico (distingue "cavo staccato" da "cavo attaccato ma senza IP"), che lo stato unificato
+del punto 1 non dà.
 
 Non è previsto un endpoint per impostare un IP statico: se servirà si aggiungerà un
 `POST /service/network/ethernet/config`.
@@ -106,6 +157,22 @@ Un `timezone` non riconosciuto dal sistema (non esiste `/usr/share/zoneinfo/<tim
 `400 INVALID_INPUT`. L'elenco delle zone valide **non** viene esposto: GingerView lo genera già
 lato client da `zone.tab` di tzdata.
 
+Un identificativo *malformato* è invece `422`, cioè un normale errore di validazione di
+FastAPI. La divisione segue la tabella di [02](02-architettura.md#modello-degli-errori): la
+sintassi è `422`, "sintatticamente valido ma non accettabile" è `400`.
+
+**Quella stringa diventa un percorso**, quindi il formato è vincolato a
+`^[A-Za-z0-9+_-]+(?:/[A-Za-z0-9+_-]+)*$`: il punto non è fra i caratteri ammessi e questo
+esclude alla radice i `..` di una path traversal. Il controllo è ripetuto dentro il servizio e
+non lasciato solo allo schema.
+
+Si legge da `timedatectl show` e non da `timedatectl status`: il primo è la forma pensata per
+essere interpretata da un programma — `Chiave=valore`, nomi stabili, niente traduzioni — il
+secondo è impaginato per una persona e cambia con la lingua di sistema. Se `timedatectl` non
+risponde o non riporta il fuso, l'endpoint dà `503 SYSTEM_TOOL_UNAVAILABLE`: non esiste un
+ripiego onesto, e rispondere "UTC" quando non lo sappiamo sarebbe un dato su cui l'utente
+potrebbe agire.
+
 ## 5. Health
 
 | Metodo | Path | Richiesta | Risposta |
@@ -126,7 +193,10 @@ per diagnosticare una macchina da remoto. `status` resta `"ok"` anche se qualche
 macchina. `version` è la versione del pacchetto, la stessa che Moonraker mostra nell'update
 manager.
 
-L'endpoint attuale è `GET /health`: va spostato sotto il prefisso `/service` insieme al resto.
+I tre `check` non sollevano mai: un comando assente vale `false`. `/service/health` deve
+rispondere anche su una macchina messa male — è lì che serve di più.
+
+È l'unico endpoint di questo documento già implementato.
 
 ## 6. Onboarding di rete (futuro — non ora)
 
