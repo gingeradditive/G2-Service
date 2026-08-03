@@ -68,11 +68,11 @@ systemd_running() { [ -d "$DESTDIR/run/systemd/system" ]; }
 # ------------------------------------------------------------------ passi
 
 create_venv() {
-	# Si prova prima con la libreria standard, ma su Raspberry Pi OS `python3 -m venv` non
-	# funziona senza il pacchetto `python3-venv`, che **nessun modulo di G2-OS installa**.
-	# `virtualenv` invece c'è di sicuro: lo installa il modulo di Kalico ed è quello con cui
-	# Moonraker stesso si crea il proprio venv. Il ripiego evita di dover cambiare G2-OS per
-	# far funzionare questo script.
+	# Si prova prima con la libreria standard: su Raspberry Pi OS `python3 -m venv` non funziona
+	# senza il pacchetto `python3-venv`, che il modulo `69-G2-Service` di G2-OS installa fra le
+	# sue `DEPS`. Non ci facciamo comunque affidamento, perché lo script gira anche su immagini
+	# costruite prima e su checkout fatti a mano: `virtualenv` c'è di sicuro, lo installa il
+	# modulo di Kalico ed è quello con cui Moonraker stesso si crea il proprio venv.
 	if as_repo_user python3 -m venv "$VENV_DIR" 2>/dev/null; then
 		return 0
 	fi

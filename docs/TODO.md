@@ -27,7 +27,7 @@ l'area indica l'argomento, non lo stato, così un task che si sblocca mantiene i
 degli errori, job asincroni, selezione reale/mock) e **tutti gli endpoint di
 [03](03-proposta-api-rete-timezone.md)** — health, rete, fuso orario — ognuno con il proprio
 mock: si legge in [02](02-architettura.md#organizzazione-del-codice). Tutto ciò che segue è da
-scrivere. I codici `CORE-1`…`CORE-7`, `NET-1`…`NET-7`, `TZ-1`…`TZ-2` e `DEP-1`…`DEP-6` sono
+scrivere. I codici `CORE-1`…`CORE-7`, `NET-1`…`NET-7`, `TZ-1`…`TZ-2` e `DEP-1`…`DEP-7` sono
 stati consumati: i nuovi task di quelle aree partirebbero da `CORE-8`, `NET-8`, `TZ-3` e
 `DEP-8`.
 
@@ -42,10 +42,6 @@ servizio su una macchina vera.
 macchina vera. È lì che si scopre se il giro WiFi funziona sul ferro e se il formato di
 `nmcli` è quello che ci aspettiamo — cose che il mock, per costruzione, non può dire. `DEV-1`
 conviene anticiparlo: senza `rundev.sh` si sviluppa scomodi.
-
-## DEP — Deploy e aggiornamenti
-
-- `DEP-7` Ripulire il modulo [`69-G2-Service`](https://github.com/gingeradditive/G2-OS/blob/develop/modules/generic/69-G2-Service) di G2-OS: togliere la logica `GITHUB_TOKEN`/SSH (codice morto, il repository è pubblico) e `python3-flask` dalle `DEPS` (residuo dell'implementazione precedente). **Sta in un altro repository** e non blocca niente: `install.sh` è già verificato contro il modulo così com'è — pronto
 
 ## DEV — Sviluppo locale e qualità
 

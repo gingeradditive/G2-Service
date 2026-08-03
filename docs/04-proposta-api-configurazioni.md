@@ -11,8 +11,8 @@
 - Il precedente è **`gingeradditive/G1-Configs`** (pubblico): contiene un *unico* set di
   configurazioni condiviso da tutte le G1, non una cartella per macchina. `G2-Printers`
   introduce quindi un modello nuovo, non un'evoluzione diretta di quello.
-- `gingeradditive/G2-Service` è **pubblico**: la logica di autenticazione con `GITHUB_TOKEN`/SSH
-  nel modulo `69-G2-Service` di G2-OS è di fatto inutilizzata.
+- `gingeradditive/G2-Service` è **pubblico** e il modulo `69-G2-Service` di G2-OS lo clona in
+  anonimo: in nessun punto della catena serve un token.
 
 ## Contesto
 

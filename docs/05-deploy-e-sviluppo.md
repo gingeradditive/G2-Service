@@ -108,12 +108,13 @@ repository deve contenerlo, altrimenti la macchina perde la capacità di aggiorn
 ## `Scripts/install.sh`
 
 Invocato alla prima installazione dal modulo
-[`G2-OS/modules/generic/69-G2-Service`](https://github.com/gingeradditive/G2-OS/blob/develop/modules/generic/69-G2-Service)
-come `sudo -u pi bash ./Scripts/install.sh` — gira quindi **come utente `pi`**, con sudo
+[`modules/generic/69-G2-Service`](https://github.com/gingeradditive/G2-OS-dev/blob/main/modules/generic/69-G2-Service)
+di G2-OS come `sudo -u pi bash ./Scripts/install.sh` — gira quindi **come utente `pi`**, con sudo
 passwordless disponibile (default su Raspberry Pi OS). Lo stesso script è poi l'`install_script`
 richiamato da Moonraker a ogni aggiornamento, quindi **deve essere idempotente**.
 
-> Il branch di default di G2-OS è `develop`, non `main`: un link a `blob/main/...` dà 404.
+> Il repository dell'immagine è `gingeradditive/G2-OS-dev` (privato, branch `main`). Il vecchio
+> `gingeradditive/G2-OS` è il primo tentativo, abbandonato: quello che c'è lì non gira più.
 
 Responsabilità:
 
@@ -138,13 +139,13 @@ per "systemd è davvero il PID 1" che usano anche i maintainer script di Debian.
 quando non c'è, si salta il riavvio dicendolo. Ignorare gli errori in blocco nasconderebbe i
 guasti veri sulla macchina vera.
 
-### Il venv e il pacchetto che non c'è
+### Il venv e il ripiego su `virtualenv`
 
-`python3 -m venv` non funziona su Raspberry Pi OS senza il pacchetto `python3-venv`, e
-**nessun modulo di G2-OS lo installa**: Kalico installa `virtualenv`, e Moonraker si crea il
-proprio venv con `virtualenv -p python3`. Lo script prova quindi prima la libreria standard e
-ripiega su `virtualenv`, che è garantito presente. Così `install.sh` funziona sull'immagine
-attuale senza richiedere nessuna modifica a G2-OS.
+`python3 -m venv` non funziona su Raspberry Pi OS senza il pacchetto `python3-venv`, che il
+modulo `69-G2-Service` installa fra le sue `DEPS`. Lo script non ci fa comunque affidamento:
+prova prima la libreria standard e ripiega su `virtualenv`, che sulla macchina c'è di sicuro
+perché lo installa il modulo di Kalico ed è quello con cui Moonraker si crea il proprio venv. Il
+ripiego copre le immagini costruite prima e i checkout fatti a mano.
 
 Il venv appartiene all'utente che possiede il repository (`pi`), non a root: è come `pi` che
 Moonraker reinstalla le dipendenze a ogni aggiornamento, e un venv di root gli sarebbe
@@ -177,12 +178,11 @@ Verificato contro l'`install.sh` attuale: **funziona senza modifiche**. Clona in
 `/home/pi/G2-Service` (che è ciò che l'`update_manager` si aspetta) e invoca lo script come
 utente `pi` dalla radice del repository, cioè esattamente le condizioni su cui è scritto.
 
-Restano due cose che si possono ripulire, nessuna delle quali blocca:
-
-- la logica `GITHUB_TOKEN`/SSH è **codice morto**: `gingeradditive/G2-Service` è pubblico e il
-  clone anonimo funziona;
-- fra le `DEPS` c'è `python3-flask`, un residuo dell'implementazione precedente: oggi il
-  servizio usa FastAPI dentro il venv e non ha bisogno di Flask di sistema.
+Il clone è **anonimo**, perché `gingeradditive/G2-Service` è pubblico, e le `DEPS` sono `git` e
+`python3-venv`. Il modulo gira **per ultimo** fra i generici, e non per caso: deposita una
+location nginx in `g2-locations.d/`, che ha effetto solo se esiste già il site di GingerView
+(`52-gingerview`), e appende il proprio blocco `update_manager` a `moonraker.conf`
+(`51-moonraker`).
 
 ## `rundev.sh`
 
