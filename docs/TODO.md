@@ -4,7 +4,7 @@ Solo le cose da fare. Quando un task è completato viene **rimosso** da qui: que
 stato fatto si legge nella documentazione (`01`–`06`), non in questo file.
 
 **Codici.** Ogni task ha un codice `AREA-n` con cui puoi farvi riferimento rapidamente
-("fai DEV-1", "INT-3 è bloccato"). I codici sono **stabili e non vengono mai riusati**:
+("fai DEV-1", "MTX-5 è bloccato"). I codici sono **stabili e non vengono mai riusati**:
 l'area indica l'argomento, non lo stato, così un task che si sblocca mantiene il suo codice.
 
 **Formato.** Una riga per task: `` `CODICE` `` + descrizione + stato in fondo. Lo stato è
@@ -29,8 +29,8 @@ degli errori, job asincroni, selezione reale/mock) e **tutti gli endpoint di
 [03](03-proposta-api-rete-timezone.md)** — health, rete, fuso orario — ognuno con il proprio
 mock: si legge in [02](02-architettura.md#organizzazione-del-codice). Tutto ciò che segue è da
 scrivere. I codici `CORE-1`…`CORE-7`, `NET-1`…`NET-7`, `TZ-1`…`TZ-2` e `DEP-1`…`DEP-7` sono
-stati consumati, come `MTX-1`…`MTX-3`: i nuovi task di quelle aree partirebbero da `CORE-8`,
-`NET-8`, `TZ-3`, `DEP-8` e `MTX-6`.
+stati consumati, come `MTX-1`…`MTX-5` e `INT-1`…`INT-3`: i nuovi task di quelle aree
+partirebbero da `CORE-8`, `NET-8`, `TZ-3`, `DEP-8`, `MTX-6` e `INT-4`.
 
 ---
 
@@ -39,33 +39,14 @@ stati consumati, come `MTX-1`…`MTX-3`: i nuovi task di quelle aree partirebber
 Copre lo scope attuale: rete, fuso orario, e tutto ciò che serve per far girare e aggiornare il
 servizio su una macchina vera.
 
-**Ordine consigliato.** API e deploy ci sono: quello che resta è `INT`, cioè accendere una
-macchina vera. È lì che si scopre se il giro WiFi funziona sul ferro e se il formato di
-`nmcli` è quello che ci aspettiamo — cose che il mock, per costruzione, non può dire. `DEV-1`
-conviene anticiparlo: senza `rundev.sh` si sviluppa scomodi. Anche `MTX` è scritto ma non provato:
-conviene verificarlo sulla macchina insieme a `INT-1`.
+**Ordine consigliato.** API, deploy, la verifica su macchina reale (`INT`) e la matrice LED
+(`MTX`) sono a posto: quello che resta in questa parte è `DEV`.
 
 ## DEV — Sviluppo locale e qualità
 
-- `DEV-1` `rundev.sh`: venv locale, `uvicorn --reload`, mock automatico fuori da Linux, nessun privilegio richiesto — pronto
 - `DEV-2` Implementazioni mock con dati verosimili (reti con segnali diversi, protette e aperte) e scenari di fallimento selezionabili con `G2_SERVICE_MOCK_SCENARIO`: password sbagliata, nessuna rete, NetworkManager assente — pronto
 - `DEV-3` Test `pytest` mirati dove il codice è fragile: parsing dell'output `nmcli` (SSID con caratteri strani, campi vuoti, formati diversi) e contratto degli endpoint tramite il livello mock. Le funzioni di parsing sono già pure e senza dipendenze, in `services/network/nmcli.py` — dipende da `DEV-2`
 - `DEV-4` Configurare `ruff` per lint e formattazione; nessuna soglia di copertura, nessun `mypy` obbligatorio — pronto
-
-## INT — Verifica
-
-- `INT-1` Provare su Raspberry Pi reale il ciclo WiFi completo: scansione, connessione a una rete vera, cambio di IP, recupero dell'esito del job dal nuovo indirizzo, disconnessione senza riconnessione automatica. Da guardare con attenzione: il formato di `nmcli` della macchina vera e la classificazione degli esiti di `connect`, verificati finora solo su output finto — pronto
-- `INT-2` Verificare che i file scritti sotto `printer_data` restino modificabili da Moonraker (che gira come `pi`, mentre il servizio è root): è l'errore più facile da introdurre e si manifesta solo sulla macchina vera. Da controllare anche che il venv resti di `pi`, o l'update_manager non riesce più ad aggiornare le dipendenze — pronto
-- `INT-3` Verificare l'integrazione con GingerView aggiornato ai nuovi path — sono i task `NET-2`…`NET-5` del TODO **di GingerView**, da non confondere con i codici di questo file — passando da nginx e non in diretta — dipende da `INT-1`
-
-## MTX — Matrice LED
-
-Design in [06 — Matrice LED](06-matrice-led.md). `matrix/`, le dipendenze in `requirements.txt`
-e i passi di `install.sh` ci sono: resta la prova sul ferro e il passaggio del percorso nelle
-configurazioni.
-
-- `MTX-4` Verifica sulla macchina vera: `LED_MESSAGE MSG="..."` scrive davvero, l'utente di Kalico ha accesso a SPI senza sudo, il PID file sostituisce il messaggio precedente invece di accumulare processi — pronto
-- `MTX-5` Aggiornare `90_matrix.cfg` al percorso `/home/pi/G2-Service/matrix/run_display.sh` **nel repository delle configurazioni** e rimuovere il vecchio `~/G2-MatrixController` dalla macchina di sviluppo: se restano tutti e due, il vecchio maschera gli aggiornamenti del nuovo — dipende da `MTX-4`
 
 ---
 

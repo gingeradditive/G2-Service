@@ -1,7 +1,7 @@
 # 05 — Deploy, aggiornamenti e sviluppo locale
 
-> Implementato, tranne `rundev.sh` (che resta da scrivere). L'unit
-> systemd, la `location` nginx e `Scripts/install.sh` sono nel repository, sotto `Scripts/`.
+> Implementato. L'unit systemd, la `location` nginx e `Scripts/install.sh` sono nel
+> repository, sotto `Scripts/`; `rundev.sh` è alla radice.
 
 ## Porta e indirizzo
 
@@ -194,7 +194,8 @@ location nginx in `g2-locations.d/`, che ha effetto solo se esiste già il site 
 ## `rundev.sh`
 
 Script alla radice del repo per lo sviluppo locale, pensato per girare **anche su macOS**, senza
-systemd né root: crea un venv locale, installa le dipendenze, avvia `uvicorn --reload`.
+systemd né root: crea (se manca) un venv locale in `venv/`, installa le dipendenze e avvia
+`uvicorn src.main:app --reload`. Rispetta `G2_SERVICE_HOST`/`G2_SERVICE_PORT` se già esportate.
 
 ## Modalità mock
 

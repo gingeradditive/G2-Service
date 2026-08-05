@@ -1,8 +1,8 @@
 # 06 — Matrice LED
 
-> **Implementato**: `matrix/` è nel repository, le dipendenze sono in `requirements.txt` e
-> `Scripts/install.sh` fa la sua parte. Mancano la prova sulla macchina vera e il passaggio del
-> percorso in `90_matrix.cfg` — `MTX-4` e `MTX-5` nel [TODO](TODO.md).
+> **Implementato e verificato**: `matrix/` è nel repository, le dipendenze sono in
+> `requirements.txt`, `Scripts/install.sh` fa la sua parte, la prova sulla macchina vera è stata
+> fatta e il percorso in `90_matrix.cfg` è stato aggiornato.
 
 ## Cos'è
 
@@ -165,8 +165,8 @@ macchina che la matrice non ce l'ha:
    `gcode_shell_command` che fallisce senza dire perché.
 
 Non serve niente per i **permessi**: lo script gira come l'utente di Kalico (`pi`), che su
-Raspberry Pi OS è già nei gruppi `spi` e `gpio`. Va verificato sulla macchina vera (`MTX-4`) —
-se non fosse così, il rimedio è nel modulo di G2-OS, non qui.
+Raspberry Pi OS è già nei gruppi `spi` e `gpio` — verificato sulla macchina vera. Se non fosse
+così, il rimedio è nel modulo di G2-OS, non qui.
 
 L'abilitazione di SPI potrebbe stare, in alternativa, nel modulo `69-G2-Service` di G2-OS
 insieme alle `DEPS`. Sta in `install.sh` perché così vale anche per le macchine già in campo, che
