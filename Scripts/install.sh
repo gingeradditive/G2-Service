@@ -24,6 +24,7 @@ SERVICE_NAME="g2-service"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPTS_DIR="$REPO_DIR/Scripts"
 VENV_DIR="$REPO_DIR/venv"
+MATRIX_DIR="$REPO_DIR/matrix"
 
 # Radice dell'installazione, con la convenzione di `make install`: vuota in produzione, un
 # prefisso quando si vuole vedere cosa combinerebbe lo script senza lasciarlo toccare il
@@ -95,6 +96,46 @@ ensure_venv() {
 	info "installo le dipendenze"
 	as_repo_user "$VENV_DIR/bin/pip" install --disable-pip-version-check --quiet \
 		-r "$REPO_DIR/requirements.txt"
+}
+
+setup_matrix() {
+	# La matrice LED (docs 06) non è un servizio: è uno script che Kalico invoca con
+	# `gcode_shell_command`. Le sue dipendenze Python le ha già installate ensure_venv, perché
+	# stanno in requirements.txt con i marker di piattaforma. Restano due cose di sistema.
+	#
+	# Niente qui fa fallire l'installazione: la matrice c'è su tutte le G2, ma questo script
+	# gira anche su checkout fatti a mano e su macchine che stampanti non sono, e il servizio
+	# di rete non deve restare fermo per colpa di un display.
+	if [ ! -d "$MATRIX_DIR" ]; then
+		warn "cartella matrix/ assente: salto la configurazione della matrice LED"
+		return
+	fi
+
+	# git conserva il bit di esecuzione, ma un checkout fatto male o un umask strano no, e il
+	# sintomo sarebbe un gcode_shell_command che fallisce senza spiegare perché.
+	as_repo_user chmod +x "$MATRIX_DIR/run_display.sh" ||
+		warn "non sono riuscito a rendere eseguibile matrix/run_display.sh"
+
+	if [ -n "$DESTDIR" ]; then
+		info "DESTDIR impostato: non tocco la configurazione SPI del sistema vero"
+		return
+	fi
+	if ! command -v raspi-config >/dev/null 2>&1; then
+		warn "raspi-config non trovato: abilita SPI a mano (dtparam=spi=on) o la matrice LED non funzionerà"
+		return
+	fi
+	# `get_spi` risponde 0 quando SPI è già abilitato: evita di riscrivere config.txt a ogni
+	# aggiornamento. `do_spi 0` sarebbe comunque idempotente.
+	if [ "$(raspi-config nonint get_spi 2>/dev/null)" = "0" ]; then
+		info "SPI già abilitato"
+		return
+	fi
+	info "abilito SPI per la matrice LED"
+	if as_root raspi-config nonint do_spi 0; then
+		warn "SPI appena abilitato: ha effetto dal prossimo riavvio"
+	else
+		warn "abilitazione di SPI non riuscita: la matrice LED non funzionerà finché non la abiliti"
+	fi
 }
 
 install_unit() {
@@ -219,6 +260,7 @@ main() {
 	info "installo da $REPO_DIR (utente $REPO_USER)"
 
 	ensure_venv
+	setup_matrix
 	install_unit
 	ensure_etc_dir
 	install_nginx_location

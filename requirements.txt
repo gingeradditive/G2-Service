@@ -1,2 +1,11 @@
 fastapi==0.141.1
 uvicorn[standard]==0.34.0
+
+# Matrice LED (matrix/, vedi docs/06-matrice-led.md). Stanno qui e non in un file a parte perché
+# l'update_manager di Moonraker installa un solo requirements in un solo venv: è così che si
+# aggiornano anche loro. I marker le escludono fuori dal Raspberry, dove non servono e non
+# compilerebbero comunque.
+luma.led_matrix>=1.7.0 ; sys_platform == "linux" and (platform_machine == "aarch64" or "arm" in platform_machine)
+luma.core>=2.4.0 ; sys_platform == "linux" and (platform_machine == "aarch64" or "arm" in platform_machine)
+spidev>=3.5 ; sys_platform == "linux" and (platform_machine == "aarch64" or "arm" in platform_machine)
+RPi.GPIO>=0.7.0 ; sys_platform == "linux" and (platform_machine == "aarch64" or "arm" in platform_machine)

@@ -42,6 +42,11 @@ di riavviare Kalico invece di farlo di nascosto con `systemctl` (vedi
   disconnessione, stato degli adattatori (WiFi e cablato).
 - **Timezone**: lettura e scrittura del fuso orario di sistema del Raspberry Pi. Non è una
   funzione della stampante e Moonraker non la espone in alcun modo.
+- **Matrice LED**: la stampante ha una matrice MAX7219 collegata via SPI su cui mostra messaggi
+  durante la stampa. Non è un'API: è uno script che G2-Service ospita e installa, e che Kalico
+  chiama con `gcode_shell_command`. Sta qui perché è hardware dell'host e perché così si aggiorna
+  con l'`update_manager` già configurato, senza un secondo repository. Vedi
+  [06 — Matrice LED](06-matrice-led.md).
 
 ### Futuro (non in questa iterazione)
 

@@ -1,7 +1,7 @@
 # 05 — Deploy, aggiornamenti e sviluppo locale
 
-> Implementato, tranne `rundev.sh` (che resta da scrivere). L'unit systemd, la `location`
-> nginx e `Scripts/install.sh` sono nel repository, sotto `Scripts/`.
+> Implementato, tranne `rundev.sh` (che resta da scrivere). L'unit
+> systemd, la `location` nginx e `Scripts/install.sh` sono nel repository, sotto `Scripts/`.
 
 ## Porta e indirizzo
 
@@ -101,6 +101,10 @@ requirements: requirements.txt
 install_script: Scripts/install.sh
 ```
 
+Il blocco copre **tutto il repository**, matrice LED compresa: è il motivo per cui le sue
+dipendenze stanno nel `requirements.txt` dichiarato qui e non in un file a parte, che Moonraker
+non guarderebbe mai (vedi [06 — Dipendenze e venv](06-matrice-led.md#dipendenze-e-venv)).
+
 ⚠️ Questo blocco vive in `moonraker.conf`, che è **sotto sincronizzazione da G2-Printers** (vedi
 [04](04-proposta-api-configurazioni.md#moonrakerconf-è-del-repository)): la copia pubblicata nel
 repository deve contenerlo, altrimenti la macchina perde la capacità di aggiornarsi.
@@ -127,6 +131,9 @@ Responsabilità:
 5. Solo se assente, aggiungere il blocco `[update_manager G2-Service]` a
    `~/printer_data/config/moonraker.conf`, così che dagli aggiornamenti successivi se ne occupi
    Moonraker.
+6. Abilitare **SPI** per la matrice LED (`raspi-config nonint do_spi 0`) e rendere eseguibile
+   `matrix/run_display.sh` — entrambi best-effort, vedi
+   [06 — Cosa aggiunge `install.sh`](06-matrice-led.md#cosa-aggiunge-installsh).
 
 Va gestito il caso in cui lo script gira **dentro il chroot di build di G2-OS**, dove systemd non
 è realmente attivo: `systemctl enable` funziona (è solo un symlink), `systemctl start/restart` no.

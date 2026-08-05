@@ -220,7 +220,8 @@ tutto è stato provato con implementazioni mock e comandi di sistema finti, e il
 di `nmcli` e `timedatectl` non è ancora stato visto.
 
 Le configurazioni stampante restano progettate ma **non implementate**: la cartella
-`services/configs/` non esiste ancora.
+`services/configs/` non esiste ancora. La matrice LED ([06](06-matrice-led.md)) invece c'è: manca solo
+la prova sul ferro, come per tutto il resto.
 
 ## Struttura del repository
 
@@ -233,7 +234,14 @@ G2-Service/
 │   ├── install.sh              installazione e aggiornamento su Raspberry Pi
 │   ├── g2-service.service      unit systemd (`__REPO_DIR__` sostituito da install.sh)
 │   └── g2-service.nginx.conf   la `location ^~ /service/` depositata in g2-locations.d/
+├── matrix/            script della matrice LED, chiamato da Kalico (06)
+│   ├── run_display.sh          wrapper invocato da `gcode_shell_command`
+│   └── led_matrix_display.py   scrive il messaggio sulla matrice MAX7219 via SPI
 ├── docs/
 ├── src/               vedi "Organizzazione del codice"
 └── .devdata/          sostituto locale di /etc/g2 e printer_data in sviluppo — non versionato
 ```
+
+`matrix/` non sta sotto `src/` di proposito: `src/` è l'applicazione FastAPI, la matrice è un
+eseguibile a parte che condivide solo il repository e il venv (vedi
+[06](06-matrice-led.md#struttura-nel-repository)).

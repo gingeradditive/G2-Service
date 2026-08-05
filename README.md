@@ -3,7 +3,8 @@
 Servizio di sistema della Stampante G2 (stampante 3D a pellet Ginger, basata su
 [Kalico](https://github.com/KalicoCrew/kalico)/[Moonraker](https://github.com/Arksine/moonraker)
 su Raspberry Pi 4). Si occupa di tutto ciò che riguarda l'host e che Moonraker non copre:
-connessione di rete (WiFi/Ethernet) e timezone di sistema.
+connessione di rete (WiFi/Ethernet), timezone di sistema e la matrice LED su cui la stampante
+scrive i messaggi durante la stampa.
 
 Per il dettaglio su scope e architettura vedi la [documentazione](docs/README.md).
 
@@ -42,10 +43,21 @@ bash ./Scripts/install.sh
 ```
 
 Idempotente: crea il venv, installa l'unit systemd, deposita la `location` nginx, crea
-`/etc/g2/` e registra il servizio nell'update manager di Moonraker. Lo invoca G2-OS alla
+`/etc/g2/`, abilita SPI per la matrice LED e registra il servizio nell'update manager di
+Moonraker. Lo invoca G2-OS alla
 creazione dell'immagine e Moonraker a ogni aggiornamento. Vedi
 [05 — Deploy](docs/05-deploy-e-sviluppo.md).
 
-> Stato attuale: tutte le API sono implementate con la loro modalità mock, e il deploy c'è.
-> Manca la verifica su una macchina vera; le configurazioni stampante sono progettate nella
-> [documentazione](docs/README.md) ma non ancora scritte.
+## Matrice LED
+
+`matrix/run_display.sh` scrive un messaggio sulla matrice MAX7219 collegata via SPI. Non è
+un'API: lo chiama Kalico con `gcode_shell_command`, e `install.sh` lo installa insieme al resto
+(vedi [06 — Matrice LED](docs/06-matrice-led.md)).
+
+```gcode
+LED_MESSAGE MSG="STAMPA IN CORSO"
+```
+
+> Stato attuale: tutte le API sono implementate con la loro modalità mock, il deploy c'è e la
+> matrice LED è nel repository. Manca la verifica su una macchina vera; le configurazioni
+> stampante sono progettate nella [documentazione](docs/README.md) ma non ancora scritte.
