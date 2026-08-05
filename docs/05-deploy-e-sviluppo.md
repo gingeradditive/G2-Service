@@ -241,3 +241,17 @@ grazie al livello mock.
 - `ruff` per lint e formattazione.
 - Nessuna soglia di copertura, nessun `mypy` obbligatorio: la struttura conta più della
   percentuale.
+
+I test stanno in `tests/`, fuori da `src/`. Le dipendenze di test non entrano in
+`requirements.txt` — quel file lo installa anche `update_manager` di Moonraker sulla macchina
+reale — ma in `requirements-dev.txt`, che lo include e aggiunge solo `pytest` e `httpx`:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+I test degli endpoint costruiscono l'app con `Settings` in mock (mai `Settings.from_env()`, per
+non dipendere dalla piattaforma su cui gira `pytest`) e coprono anche i tre scenari di
+`G2_SERVICE_MOCK_SCENARIO` sopra descritti, passati alla `Settings` di ogni test invece che
+letti dall'ambiente.

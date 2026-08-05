@@ -1,0 +1,6 @@
+# Dipendenze di sviluppo, non installate sulla macchina reale: quelle stanno solo in
+# requirements.txt (docs 05 — Test e qualità).
+-r requirements.txt
+
+pytest==8.4.2
+httpx==0.28.1
