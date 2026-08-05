@@ -29,8 +29,8 @@ degli errori, job asincroni, selezione reale/mock) e **tutti gli endpoint di
 [03](03-proposta-api-rete-timezone.md)** — health, rete, fuso orario — ognuno con il proprio
 mock: si legge in [02](02-architettura.md#organizzazione-del-codice). Tutto ciò che segue è da
 scrivere. I codici `CORE-1`…`CORE-7`, `NET-1`…`NET-7`, `TZ-1`…`TZ-2` e `DEP-1`…`DEP-7` sono
-stati consumati, come `MTX-1`…`MTX-5` e `INT-1`…`INT-3`: i nuovi task di quelle aree
-partirebbero da `CORE-8`, `NET-8`, `TZ-3`, `DEP-8`, `MTX-6` e `INT-4`.
+stati consumati, come `MTX-1`…`MTX-5`, `INT-1`…`INT-3` e `DEV-1`…`DEV-2`: i nuovi task di
+quelle aree partirebbero da `CORE-8`, `NET-8`, `TZ-3`, `DEP-8`, `MTX-6`, `INT-4` e `DEV-5`.
 
 ---
 
@@ -44,8 +44,7 @@ servizio su una macchina vera.
 
 ## DEV — Sviluppo locale e qualità
 
-- `DEV-2` Implementazioni mock con dati verosimili (reti con segnali diversi, protette e aperte) e scenari di fallimento selezionabili con `G2_SERVICE_MOCK_SCENARIO`: password sbagliata, nessuna rete, NetworkManager assente — pronto
-- `DEV-3` Test `pytest` mirati dove il codice è fragile: parsing dell'output `nmcli` (SSID con caratteri strani, campi vuoti, formati diversi) e contratto degli endpoint tramite il livello mock. Le funzioni di parsing sono già pure e senza dipendenze, in `services/network/nmcli.py` — dipende da `DEV-2`
+- `DEV-3` Test `pytest` mirati dove il codice è fragile: parsing dell'output `nmcli` (SSID con caratteri strani, campi vuoti, formati diversi) e contratto degli endpoint tramite il livello mock. Le funzioni di parsing sono già pure e senza dipendenze, in `services/network/nmcli.py` — pronto
 - `DEV-4` Configurare `ruff` per lint e formattazione; nessuna soglia di copertura, nessun `mypy` obbligatorio — pronto
 
 ---

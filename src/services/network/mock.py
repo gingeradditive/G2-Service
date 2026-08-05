@@ -5,8 +5,11 @@ giro completo — scansione, connessione, stato che cambia, disconnessione — s
 macOS come sulla macchina vera. I job hanno anche una durata finta di qualche secondo,
 altrimenti finirebbero prima che il client faccia in tempo a vederli `running`.
 
-Gli scenari di fallimento selezionabili (`G2_SERVICE_MOCK_SCENARIO`) sono `DEV-2`: qui una
-connessione con la password sbagliata riesce comunque.
+`G2_SERVICE_MOCK_SCENARIO` seleziona un fallimento da riprodurre: `wrong-password` fa fallire
+ogni tentativo di connessione con `WIFI_AUTH_FAILED` (a prescindere dalla password ricevuta),
+`no-networks` svuota la scansione WiFi, `nm-unavailable` fa fallire ogni operazione come se
+NetworkManager non fosse in esecuzione — lo stesso caso che il servizio reale traduce in
+`SystemToolUnavailableError`.
 """
 
 import asyncio
@@ -14,7 +17,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from src.errors import JobFailure, NotFoundError
+from src.errors import JobFailure, NotFoundError, SystemToolUnavailableError
+from src.mock_scenarios import MockScenario
 from src.models.network import (
     Adapter,
     Addressing,
@@ -75,6 +79,7 @@ def _default_access_points() -> list[_AccessPoint]:
 class MockNetworkService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        self._scenario = settings.mock_scenario
         self._access_points = _default_access_points()
         self._saved = [
             _Saved("Ginger-Lab", True, datetime.now(timezone.utc) - timedelta(minutes=12)),
@@ -88,6 +93,7 @@ class MockNetworkService:
     # ------------------------------------------------------------------------- letture
 
     async def status(self) -> NetworkStatus:
+        self._ensure_available()
         interfaces = [
             NetworkInterface(
                 device=ETHERNET_DEVICE,
@@ -146,8 +152,11 @@ class MockNetworkService:
         )
 
     async def wifi_networks(self, *, rescan: bool = False) -> list[WifiNetwork]:
+        self._ensure_available()
         if rescan:
             await asyncio.sleep(_RESCAN_DELAY)
+        if self._scenario is MockScenario.NO_NETWORKS:
+            return []
         networks = [
             WifiNetwork(
                 ssid=access_point.ssid,
@@ -162,12 +171,14 @@ class MockNetworkService:
         return networks
 
     async def saved_networks(self) -> list[SavedNetwork]:
+        self._ensure_available()
         return [
             SavedNetwork(ssid=s.ssid, autoconnect=s.autoconnect, last_used=s.last_used)
             for s in self._saved
         ]
 
     async def ethernet_status(self) -> EthernetStatus:
+        self._ensure_available()
         connected = self._cable_connected
         return EthernetStatus(
             device=ETHERNET_DEVICE,
@@ -180,7 +191,10 @@ class MockNetworkService:
     # ---------------------------------------------------------------------- scritture
 
     async def wifi_connect(self, ssid: str, password: str | None) -> dict[str, Any]:
+        self._ensure_available()
         await asyncio.sleep(_CONNECT_DELAY)
+        if self._scenario is MockScenario.WRONG_PASSWORD:
+            raise JobFailure("WIFI_AUTH_FAILED", "Password errata o autenticazione rifiutata")
         if self._find(ssid) is None:
             raise JobFailure("WIFI_NETWORK_NOT_FOUND", f"Rete non trovata in scansione: {ssid}")
         self._connected_ssid = ssid
@@ -193,6 +207,7 @@ class MockNetworkService:
         return {"ssid": ssid, "ip": _MOCK_IP.model_dump(by_alias=True)}
 
     async def wifi_disconnect(self) -> dict[str, Any]:
+        self._ensure_available()
         await asyncio.sleep(_DISCONNECT_DELAY)
         if self._connected_ssid is None:
             return {"ssid": None, "alreadyDisconnected": True}
@@ -204,6 +219,7 @@ class MockNetworkService:
         return {"ssid": ssid, "alreadyDisconnected": False}
 
     async def forget_network(self, ssid: str) -> None:
+        self._ensure_available()
         saved = self._find_saved(ssid)
         if saved is None:
             raise NotFoundError(f"Rete non salvata: {ssid}")
@@ -212,6 +228,10 @@ class MockNetworkService:
             self._connected_ssid = None
 
     # ------------------------------------------------------------------------ interni
+
+    def _ensure_available(self) -> None:
+        if self._scenario is MockScenario.NM_UNAVAILABLE:
+            raise SystemToolUnavailableError("NetworkManager non è in esecuzione")
 
     def _find(self, ssid: str) -> _AccessPoint | None:
         return next((ap for ap in self._access_points if ap.ssid == ssid), None)

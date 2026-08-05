@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.mock_scenarios import MockScenario, parse_mock_scenario
+
 # Prefisso di *tutti* gli endpoint, Swagger compreso. Non è configurabile: è una convenzione
 # fissata insieme alla regola nginx `location ^~ /service/` (docs 02 e 05), e cambiarla da una
 # variabile d'ambiente vorrebbe dire poter rompere il routing senza accorgersene.
@@ -39,6 +41,7 @@ class Settings:
     host: str
     port: int
     mock: bool
+    mock_scenario: MockScenario | None
     etc_dir: Path
     printer_data_dir: Path
 
@@ -61,6 +64,7 @@ class Settings:
             host=environ.get("G2_SERVICE_HOST", "0.0.0.0"),
             port=_as_int(environ.get("G2_SERVICE_PORT"), default=8000),
             mock=mock,
+            mock_scenario=parse_mock_scenario(environ.get("G2_SERVICE_MOCK_SCENARIO")),
             etc_dir=_as_path(
                 environ.get("G2_SERVICE_ETC_DIR"),
                 default=DEV_DATA_DIR / "etc" / "g2" if mock else ETC_DIR,

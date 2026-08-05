@@ -217,8 +217,17 @@ in tempo a vederli `running` e quel percorso resterebbe non provato.
 
 Deve poter simulare anche i **fallimenti**, altrimenti serve solo a sviluppare il caso felice
 mentre i casi che rompono l'interfaccia restano non testabili. Una variabile
-`G2_SERVICE_MOCK_SCENARIO` seleziona lo scenario: password sbagliata, nessuna rete trovata,
-NetworkManager assente, GitHub irraggiungibile, seriale inesistente nel repository. È anche il
+`G2_SERVICE_MOCK_SCENARIO` seleziona lo scenario, per tutto il servizio:
+
+- `wrong-password` — ogni `wifi.connect` fallisce con `WIFI_AUTH_FAILED`, a prescindere dalla
+  password ricevuta;
+- `no-networks` — `GET /service/network/wifi/networks` restituisce sempre una lista vuota;
+- `nm-unavailable` — ogni operazione di rete fallisce con `SYSTEM_TOOL_UNAVAILABLE`, come se
+  NetworkManager non fosse in esecuzione, e `networkManager` risulta `false` in
+  `GET /service/health`.
+
+GitHub irraggiungibile e seriale inesistente nel repository sono scenari della stessa variabile,
+ma arriveranno con la parte 2 (`CFG`, `FAC`): oggi quegli endpoint non esistono ancora. È anche il
 modo in cui si sviluppa GingerView contro un G2-Service finto senza avere una stampante sul banco.
 
 ## Test e qualità
