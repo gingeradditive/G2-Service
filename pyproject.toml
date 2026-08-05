@@ -1,3 +1,16 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 99
+target-version = "py311"
+# Copia storica del progetto precedente, tenuta solo come riferimento in git (docs 02): non è
+# codice attivo e non va né lintata né riformattata.
+extend-exclude = ["OLD_RESOURCES"]
+
+[tool.ruff.lint]
+# Default (`E`, `F`) più import ordinati (`I`) e le convenzioni "bugbear" (`B`): quello che
+# prende gli errori più comuni senza essere pedante. Niente `D` (docstring): i moduli hanno
+# già una prosa libera in italiano, non il formato imposto da pydocstyle.
+select = ["E", "F", "I", "B"]

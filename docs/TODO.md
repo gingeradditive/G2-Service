@@ -29,22 +29,15 @@ degli errori, job asincroni, selezione reale/mock) e **tutti gli endpoint di
 [03](03-proposta-api-rete-timezone.md)** — health, rete, fuso orario — ognuno con il proprio
 mock: si legge in [02](02-architettura.md#organizzazione-del-codice). Tutto ciò che segue è da
 scrivere. I codici `CORE-1`…`CORE-7`, `NET-1`…`NET-7`, `TZ-1`…`TZ-2` e `DEP-1`…`DEP-7` sono
-stati consumati, come `MTX-1`…`MTX-5`, `INT-1`…`INT-3` e `DEV-1`…`DEV-3`: i nuovi task di
+stati consumati, come `MTX-1`…`MTX-5`, `INT-1`…`INT-3` e `DEV-1`…`DEV-4`: i nuovi task di
 quelle aree partirebbero da `CORE-8`, `NET-8`, `TZ-3`, `DEP-8`, `MTX-6`, `INT-4` e `DEV-5`.
 
 ---
 
 # Parte 1 — Implementazione corrente
 
-Copre lo scope attuale: rete, fuso orario, e tutto ciò che serve per far girare e aggiornare il
-servizio su una macchina vera.
-
-**Ordine consigliato.** API, deploy, la verifica su macchina reale (`INT`) e la matrice LED
-(`MTX`) sono a posto: quello che resta in questa parte è `DEV`.
-
-## DEV — Sviluppo locale e qualità
-
-- `DEV-4` Configurare `ruff` per lint e formattazione; nessuna soglia di copertura, nessun `mypy` obbligatorio — pronto
+Completa: API, deploy, verifica su macchina reale (`INT`), matrice LED (`MTX`) e sviluppo
+locale/test/lint (`DEV`) sono tutti a posto. Si legge in [02](02-architettura.md)–[06](06-matrice-led.md).
 
 ---
 

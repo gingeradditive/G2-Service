@@ -47,6 +47,4 @@ def build_services(settings: Settings) -> Services:
         network = NmcliNetworkService(settings)
         timezone = TimedatectlTimezoneService(settings)
     logger.info("Implementazioni %s attive", "mock" if settings.mock else "reali")
-    return Services(
-        health=health, network=network, timezone=timezone, jobs=JobRegistry()
-    )
+    return Services(health=health, network=network, timezone=timezone, jobs=JobRegistry())

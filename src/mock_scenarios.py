@@ -23,6 +23,4 @@ def parse_mock_scenario(raw: str | None) -> "MockScenario | None":
         return MockScenario(value)
     except ValueError:
         valid = ", ".join(scenario.value for scenario in MockScenario)
-        raise ValueError(
-            f"Scenario mock non riconosciuto: {raw!r} (validi: {valid})"
-        ) from None
+        raise ValueError(f"Scenario mock non riconosciuto: {raw!r} (validi: {valid})") from None

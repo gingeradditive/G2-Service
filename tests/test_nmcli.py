@@ -199,9 +199,7 @@ def test_indexed_values_placeholder_vuoto_interrompe_la_sequenza():
 
 
 def test_parse_timestamp_epoch_valido():
-    assert parse_timestamp("1700000000") == datetime.fromtimestamp(
-        1700000000, tz=timezone.utc
-    )
+    assert parse_timestamp("1700000000") == datetime.fromtimestamp(1700000000, tz=timezone.utc)
 
 
 def test_parse_timestamp_zero_vuol_dire_mai_usata():

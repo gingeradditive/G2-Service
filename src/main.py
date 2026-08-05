@@ -60,9 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 # uvicorn viene lanciato con `src.main:app`, sia da systemd sia da rundev.sh.
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s: %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s: %(message)s")
 app = create_app()
 
 

@@ -43,9 +43,7 @@ class TimedatectlTimezoneService:
 
     async def set_timezone(self, timezone: str) -> TimezoneStatus:
         ensure_timezone_exists(timezone)
-        result = await run_command(
-            [TIMEDATECTL, "set-timezone", timezone], env=_C_LOCALE
-        )
+        result = await run_command([TIMEDATECTL, "set-timezone", timezone], env=_C_LOCALE)
         if not result.ok:
             raise _set_failure(timezone, result.stderr)
         logger.info("Fuso orario impostato a %s", timezone)

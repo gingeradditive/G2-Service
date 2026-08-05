@@ -18,12 +18,11 @@ import signal
 import sys
 import time
 
-from luma.led_matrix.device import max7219
-from luma.core.interface.serial import spi, noop
+from luma.core.interface.serial import noop, spi
 from luma.core.legacy import text, textsize
-from luma.core.legacy.font import proportional, CP437_FONT
+from luma.core.legacy.font import CP437_FONT, proportional
+from luma.led_matrix.device import max7219
 from PIL import Image, ImageDraw
-
 
 PID_FILE = "/tmp/led_matrix_display.pid"
 
@@ -107,13 +106,15 @@ def main():
         help="Text to display. If omitted, reads from stdin.",
     )
     parser.add_argument(
-        "--cascaded", "-n",
+        "--cascaded",
+        "-n",
         type=int,
         default=8,
         help="Number of cascaded MAX7219 modules (default: 8).",
     )
     parser.add_argument(
-        "--brightness", "-b",
+        "--brightness",
+        "-b",
         type=int,
         default=16,
         choices=range(0, 256),

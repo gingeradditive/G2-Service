@@ -21,9 +21,7 @@ class MockTimezoneService:
         self._ntp_synchronized = True
 
     async def status(self) -> TimezoneStatus:
-        return TimezoneStatus(
-            timezone=self._timezone, ntp_synchronized=self._ntp_synchronized
-        )
+        return TimezoneStatus(timezone=self._timezone, ntp_synchronized=self._ntp_synchronized)
 
     async def set_timezone(self, timezone: str) -> TimezoneStatus:
         ensure_timezone_exists(timezone)

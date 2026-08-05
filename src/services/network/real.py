@@ -289,7 +289,9 @@ class NmcliNetworkService:
         )
 
     async def _addressing(self, uuid: str) -> Addressing | None:
-        result = await nmcli("--terse", "--fields", "ipv4.method", "connection", "show", "uuid", uuid)
+        result = await nmcli(
+            "--terse", "--fields", "ipv4.method", "connection", "show", "uuid", uuid
+        )
         if not result.ok:
             return None
         method = parse_detail(result.stdout).get("ipv4.method", "").strip().lower()
@@ -307,9 +309,8 @@ class NmcliNetworkService:
             "--terse", "--fields", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"
         )
         if not result.ok:
-            raise SystemToolUnavailableError(
-                f"Elenco interfacce non disponibile: {result.stderr.strip() or 'errore sconosciuto'}"
-            )
+            error = result.stderr.strip() or "errore sconosciuto"
+            raise SystemToolUnavailableError(f"Elenco interfacce non disponibile: {error}")
         return parse_devices(result.stdout)
 
     async def _detail(self, device: str) -> dict[str, str]:
@@ -330,9 +331,8 @@ class NmcliNetworkService:
         """Le connessioni WiFi salvate, con i dati che stanno solo dentro ogni profilo."""
         result = await nmcli("--terse", "--fields", "UUID,TYPE,NAME", "connection", "show")
         if not result.ok:
-            raise SystemToolUnavailableError(
-                f"Elenco reti salvate non disponibile: {result.stderr.strip() or 'errore sconosciuto'}"
-            )
+            error = result.stderr.strip() or "errore sconosciuto"
+            raise SystemToolUnavailableError(f"Elenco reti salvate non disponibile: {error}")
         profiles = []
         for line in result.stdout.splitlines():
             if not line.strip():

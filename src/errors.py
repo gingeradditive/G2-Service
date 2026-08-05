@@ -131,4 +131,6 @@ async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResp
 
 
 def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content={"detail": {"code": code, "message": message}})
+    return JSONResponse(
+        status_code=status_code, content={"detail": {"code": code, "message": message}}
+    )

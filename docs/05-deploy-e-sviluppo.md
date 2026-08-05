@@ -244,14 +244,23 @@ grazie al livello mock.
 
 I test stanno in `tests/`, fuori da `src/`. Le dipendenze di test non entrano in
 `requirements.txt` — quel file lo installa anche `update_manager` di Moonraker sulla macchina
-reale — ma in `requirements-dev.txt`, che lo include e aggiunge solo `pytest` e `httpx`:
+reale — ma in `requirements-dev.txt`, che lo include e aggiunge `pytest`, `httpx` e `ruff`:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
+ruff check .
+ruff format .
 ```
 
 I test degli endpoint costruiscono l'app con `Settings` in mock (mai `Settings.from_env()`, per
 non dipendere dalla piattaforma su cui gira `pytest`) e coprono anche i tre scenari di
 `G2_SERVICE_MOCK_SCENARIO` sopra descritti, passati alla `Settings` di ogni test invece che
 letti dall'ambiente.
+
+La configurazione di `ruff` sta in `pyproject.toml`: riga a 99 caratteri (i moduli più
+commentati, come `nmcli.py` ed `errors.py`, sfioravano l'88 di default), le regole di base più
+import ordinati (`I`) e le convenzioni "bugbear" (`B`), niente regole di docstring (`D`) perché
+la prosa dei commenti è libera e in italiano, non nel formato che pydocstyle si aspetta.
+`OLD_RESOURCES/` è escluso: è la copia storica del progetto precedente, tenuta solo come
+riferimento (docs 02), non codice attivo.

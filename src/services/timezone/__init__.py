@@ -18,8 +18,7 @@ _VALID_NAME = re.compile(TIMEZONE_PATTERN)
 
 
 class TimezoneService(Protocol):
-    async def status(self) -> TimezoneStatus:
-        ...
+    async def status(self) -> TimezoneStatus: ...
 
     async def set_timezone(self, timezone: str) -> TimezoneStatus:
         """Solleva `InvalidInputError` (400) se il fuso non esiste su questa macchina."""
