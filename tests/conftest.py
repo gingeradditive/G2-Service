@@ -27,6 +27,7 @@ def make_client(tmp_path) -> Callable[[MockScenario | None], TestClient]:
             mock_scenario=mock_scenario,
             etc_dir=tmp_path / "etc" / "g2",
             printer_data_dir=tmp_path / "printer_data",
+            media_dir=tmp_path / "media",
         )
         return TestClient(create_app(settings))
 

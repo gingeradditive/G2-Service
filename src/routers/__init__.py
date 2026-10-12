@@ -7,7 +7,7 @@ progetto resta sviluppabile su macOS e testabile senza un Raspberry Pi.
 
 from fastapi import APIRouter
 
-from src.routers import health, jobs, network, timezone
+from src.routers import health, jobs, network, timezone, usb
 
 #: Tutte le rotte del servizio. `main.py` lo monta sotto il prefisso `/service`, che quindi
 #: non va ripetuto nei singoli router.
@@ -15,4 +15,5 @@ api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(network.router)
 api_router.include_router(timezone.router)
+api_router.include_router(usb.router)
 api_router.include_router(jobs.router)

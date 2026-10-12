@@ -29,6 +29,9 @@ DEV_DATA_DIR = REPO_ROOT / ".devdata"
 # nel posto sbagliato. Il percorso è quindi esplicito, non derivato dall'utente corrente.
 PRINTER_DATA_DIR = Path("/home/pi/printer_data")
 ETC_DIR = Path("/etc/g2")
+# Dove G2-OS monta la chiavetta (pmount, modulo `61-EnableUSB`), direttamente e non in una
+# sottocartella: una chiavetta alla volta.
+MEDIA_DIR = Path("/media")
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"0", "false", "no", "off"})
@@ -44,6 +47,7 @@ class Settings:
     mock_scenario: MockScenario | None
     etc_dir: Path
     printer_data_dir: Path
+    media_dir: Path
 
     @property
     def serial_file(self) -> Path:
@@ -55,6 +59,11 @@ class Settings:
     def printer_config_dir(self) -> Path:
         """Cartella delle configurazioni Klipper/Kalico, quella che legge Moonraker."""
         return self.printer_data_dir / "config"
+
+    @property
+    def gcodes_dir(self) -> Path:
+        """Radice `gcodes` di Moonraker, dove finiscono i file importati dalla chiavetta."""
+        return self.printer_data_dir / "gcodes"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -72,6 +81,10 @@ class Settings:
             printer_data_dir=_as_path(
                 environ.get("G2_SERVICE_PRINTER_DATA_DIR"),
                 default=DEV_DATA_DIR / "printer_data" if mock else PRINTER_DATA_DIR,
+            ),
+            media_dir=_as_path(
+                environ.get("G2_SERVICE_MEDIA_DIR"),
+                default=DEV_DATA_DIR / "media" if mock else MEDIA_DIR,
             ),
         )
 

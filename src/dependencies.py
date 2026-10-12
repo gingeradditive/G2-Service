@@ -14,6 +14,7 @@ from src.services.health import HealthService
 from src.services.jobs import JobRegistry
 from src.services.network import NetworkService
 from src.services.timezone import TimezoneService
+from src.services.usb import UsbService
 from src.settings import Settings
 
 
@@ -37,6 +38,10 @@ def get_timezone_service(
     services: Annotated[Services, Depends(get_services)],
 ) -> TimezoneService:
     return services.timezone
+
+
+def get_usb_service(services: Annotated[Services, Depends(get_services)]) -> UsbService:
+    return services.usb
 
 
 def get_job_registry(services: Annotated[Services, Depends(get_services)]) -> JobRegistry:

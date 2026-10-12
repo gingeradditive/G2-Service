@@ -17,6 +17,9 @@ from src.services.network.real import NmcliNetworkService
 from src.services.timezone import TimezoneService
 from src.services.timezone.mock import MockTimezoneService
 from src.services.timezone.real import TimedatectlTimezoneService
+from src.services.usb import UsbService
+from src.services.usb.mock import MockUsbService
+from src.services.usb.real import FilesystemUsbService
 from src.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -29,6 +32,7 @@ class Services:
     health: HealthService
     network: NetworkService
     timezone: TimezoneService
+    usb: UsbService
     # Il registro dei job non ha un mock: è tutto in memoria, funziona identico ovunque. A
     # essere finte sono semmai le operazioni che ci girano dentro.
     jobs: JobRegistry
@@ -38,13 +42,16 @@ def build_services(settings: Settings) -> Services:
     health: HealthService
     network: NetworkService
     timezone: TimezoneService
+    usb: UsbService
     if settings.mock:
         health = MockHealthService(settings)
         network = MockNetworkService(settings)
         timezone = MockTimezoneService(settings)
+        usb = MockUsbService(settings)
     else:
         health = SystemHealthService(settings)
         network = NmcliNetworkService(settings)
         timezone = TimedatectlTimezoneService(settings)
+        usb = FilesystemUsbService(settings)
     logger.info("Implementazioni %s attive", "mock" if settings.mock else "reali")
-    return Services(health=health, network=network, timezone=timezone, jobs=JobRegistry())
+    return Services(health=health, network=network, timezone=timezone, usb=usb, jobs=JobRegistry())

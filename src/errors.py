@@ -62,6 +62,30 @@ class ConflictError(AppError):
     default_message = "Operazione già in corso"
 
 
+class UsbNotMountedError(AppError):
+    """Nessuna chiavetta montata (docs 07)."""
+
+    status_code = 409
+    code = "USB_NOT_MOUNTED"
+    default_message = "Nessuna chiavetta USB inserita"
+
+
+class TargetExistsError(AppError):
+    """Il file di destinazione esiste già e la richiesta non dice cosa farne (docs 07)."""
+
+    status_code = 409
+    code = "FILE_EXISTS"
+    default_message = "Esiste già un file con questo nome"
+
+
+class UsbReadError(AppError):
+    """La chiavetta non si lascia leggere, tipicamente perché è stata tolta (docs 07)."""
+
+    status_code = 503
+    code = "USB_READ_ERROR"
+    default_message = "Lettura della chiavetta USB non riuscita"
+
+
 class UpstreamUnavailableError(AppError):
     """Un servizio esterno non risponde (GitHub)."""
 
