@@ -107,7 +107,7 @@ che permettono di aggiornare Kalico, GingerView e G2-Service stesso. Se la copia
 `G2-Printers` li omette, **la macchina perde la capacità di aggiornarsi**. È un rischio accettato
 consapevolmente: la copia nel repository deve sempre contenerli. G2-Service non li reinserisce di
 nascosto — sarebbe un comportamento occulto che contraddice "il repository è la fonte di verità" —
-ma **dopo ogni sync verifica che `[update_manager G2-Service]` sia presente e, se manca, lo
+ma **dopo ogni sync verifica che `[update_manager g2-service]` sia presente e, se manca, lo
 segnala** nel log e in `GET /service/config/status`. La situazione resta recuperabile da remoto:
 basta pubblicare un `moonraker.conf` corretto, perché la sincronizzazione continua a funzionare
 anche quando l'update manager è rotto.

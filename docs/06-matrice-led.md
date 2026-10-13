@@ -34,7 +34,7 @@ sistema, esattamente come rete e orologio. Kalico non la conosce e Moonraker non
 è lo spazio che G2-Service occupa per definizione ([01 — Cos'è G2-Service](01-panoramica.md#cosè-g2-service)).
 
 La ragione pratica pesa quanto quella di principio: così il codice della matrice **si aggiorna
-da solo**. Il blocco `[update_manager G2-Service]` che è già su ogni macchina
+da solo**. Il blocco `[update_manager g2-service]` che è già su ogni macchina
 ([05](05-deploy-e-sviluppo.md#aggiornamento-tramite-lupdate_manager-di-moonraker)) fa `git pull`,
 reinstalla le dipendenze e richiama `Scripts/install.sh`: la matrice entra in quel giro senza
 aggiungere né un repository, né un blocco `update_manager`, né un secondo servizio da tenere in

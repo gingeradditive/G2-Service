@@ -90,7 +90,7 @@ repository locale con `origin`, fa `git pull`, reinstalla le dipendenze, richiam
 installazione e riavvia il servizio.
 
 ```ini
-[update_manager G2-Service]
+[update_manager g2-service]
 type: git_repo
 path: ~/G2-Service
 origin: https://github.com/gingeradditive/G2-Service.git
@@ -100,6 +100,12 @@ virtualenv: ~/G2-Service/venv
 requirements: requirements.txt
 install_script: Scripts/install.sh
 ```
+
+La sezione si chiama **`g2-service`**, come l'unit systemd: Moonraker accetta in
+`managed_services` solo il nome della sezione (più `klipper`/`moonraker`). Con il vecchio nome
+`[update_manager G2-Service]` scartava `managed_services: g2-service` con un avviso e dopo un
+aggiornamento non riavviava il servizio. `Scripts/install.sh` rinomina da solo la sezione sulle
+macchine installate prima.
 
 Il blocco copre **tutto il repository**, matrice LED compresa: è il motivo per cui le sue
 dipendenze stanno nel `requirements.txt` dichiarato qui e non in un file a parte, che Moonraker
@@ -128,7 +134,7 @@ Responsabilità:
 3. Depositare `/etc/nginx/g2-locations.d/g2-service.conf` (creando la directory se manca) e
    ricaricare nginx.
 4. Creare `/etc/g2/` per il seriale e lo stato delle configurazioni.
-5. Solo se assente, aggiungere il blocco `[update_manager G2-Service]` a
+5. Solo se assente, aggiungere il blocco `[update_manager g2-service]` a
    `~/printer_data/config/moonraker.conf`, così che dagli aggiornamenti successivi se ne occupi
    Moonraker.
 6. Abilitare **SPI** per la matrice LED (`raspi-config nonint do_spi 0`) e rendere eseguibile
@@ -177,7 +183,7 @@ Se `moonraker.conf` è un symlink, lo script **non lo tocca** e lo dice: in quel
 appartiene al repository delle configurazioni (vedi
 [04](04-proposta-api-configurazioni.md#moonrakerconf-è-del-repository)), scriverci sarebbe un
 cambiamento occulto e verrebbe comunque perso alla sincronizzazione successiva. Il blocco
-`[update_manager G2-Service]` deve stare nella copia pubblicata.
+`[update_manager g2-service]` deve stare nella copia pubblicata.
 
 ## Il modulo `69-G2-Service` di G2-OS
 

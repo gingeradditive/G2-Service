@@ -205,14 +205,24 @@ ensure_update_manager_block() {
 		# cambiamento occulto, e verrebbe comunque cancellato alla sincronizzazione
 		# successiva (docs 04 — moonraker.conf è del repository).
 		warn "moonraker.conf è un symlink (gestito dal repository delle configurazioni):" \
-			"non lo tocco. Il blocco [update_manager G2-Service] deve stare nella copia pubblicata"
+			"non lo tocco. Il blocco [update_manager g2-service] deve stare nella copia pubblicata"
 		return
 	fi
 	# Solo un'intestazione di sezione a inizio riga: il moonraker.conf di G2-OS ha un commento
 	# "# [update_manager G2-Service] is appended by ...", e un grep sul testo semplice lo
 	# prendeva per il blocco, che così non veniva mai aggiunto.
+	# La sezione si chiama come l'unit systemd, `g2-service`: Moonraker accetta in
+	# managed_services solo il nome della sezione (più klipper/moonraker), quindi con
+	# `[update_manager G2-Service]` rifiutava `managed_services: g2-service` e dopo un
+	# aggiornamento non avrebbe riavviato il servizio.
+	if grep -qE '^\[update_manager g2-service\]' "$conf"; then
+		info "blocco [update_manager g2-service] già presente"
+		return
+	fi
+	# Macchine installate prima: stessa sezione col nome vecchio, si rinomina e basta.
 	if grep -qE '^\[update_manager G2-Service\]' "$conf"; then
-		info "blocco [update_manager G2-Service] già presente"
+		info "rinomino [update_manager G2-Service] in [update_manager g2-service]"
+		as_repo_user sed -i 's/^\[update_manager G2-Service\]/[update_manager g2-service]/' "$conf"
 		return
 	fi
 
@@ -221,10 +231,10 @@ ensure_update_manager_block() {
 			"il blocco update_manager qui sotto punterà al posto sbagliato, correggilo a mano"
 	fi
 
-	info "aggiungo il blocco [update_manager G2-Service] a $conf"
+	info "aggiungo il blocco [update_manager g2-service] a $conf"
 	as_repo_user tee -a "$conf" >/dev/null <<'EOF'
 
-[update_manager G2-Service]
+[update_manager g2-service]
 type: git_repo
 path: ~/G2-Service
 origin: https://github.com/gingeradditive/G2-Service.git
