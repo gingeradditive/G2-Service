@@ -172,7 +172,9 @@ install_nginx_location() {
 	as_root install -d -m 755 "$NGINX_DIR"
 	as_root install -m 644 "$SCRIPTS_DIR/${SERVICE_NAME}.nginx.conf" "$NGINX_CONF"
 
-	if ! grep -rqs 'g2-locations.d' \
+	# -R, non -r: i site in sites-enabled sono symlink a sites-available, e -r non li segue
+	# (il site di GingerView include g2-locations.d ma l'avviso usciva lo stesso).
+	if ! grep -Rqs 'g2-locations.d' \
 		"$NGINX_ROOT/nginx.conf" "$NGINX_ROOT/conf.d" "$NGINX_ROOT/sites-enabled"; then
 		warn "nessun site nginx include g2-locations.d/: /service/ non sarà raggiungibile" \
 			"dalla porta 80 finché GingerView non aggiunge la riga include (suo TODO NET-5)." \
@@ -206,7 +208,10 @@ ensure_update_manager_block() {
 			"non lo tocco. Il blocco [update_manager G2-Service] deve stare nella copia pubblicata"
 		return
 	fi
-	if grep -qF '[update_manager G2-Service]' "$conf"; then
+	# Solo un'intestazione di sezione a inizio riga: il moonraker.conf di G2-OS ha un commento
+	# "# [update_manager G2-Service] is appended by ...", e un grep sul testo semplice lo
+	# prendeva per il blocco, che così non veniva mai aggiunto.
+	if grep -qE '^\[update_manager G2-Service\]' "$conf"; then
 		info "blocco [update_manager G2-Service] già presente"
 		return
 	fi
