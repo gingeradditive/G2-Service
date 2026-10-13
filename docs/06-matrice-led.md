@@ -72,7 +72,7 @@ vedi [04](04-proposta-api-configurazioni.md)):
 
 ```ini
 [gcode_shell_command LED_MSG]
-command: /home/pi/G2-Service/matrix/run_display.sh
+command: /bin/bash /home/pi/G2-Service/matrix/run_display.sh
 timeout: 10
 verbose: True
 
@@ -86,6 +86,14 @@ gcode:
 ```
 
 Dal gcode: `LED_MESSAGE MSG="STAMPA IN CORSO"`.
+
+**Lo script si lancia tramite `/bin/bash`, non direttamente.** `RUN_SHELL_COMMAND` solleva un
+errore gcode solo quando non riesce ad avviare l'eseguibile, e un errore dentro una macro ferma
+tutta la macro: con `command:` puntato direttamente allo script, uno script assente blocca
+`START_PRINT` alla prima riga `LED_MESSAGE`, e nessuna stampa può partire. È successo con
+l'immagine nuova, che non aveva più `~/G2-MatrixController` mentre `90_matrix.cfg` puntava ancora
+lì. `/bin/bash` invece esiste sempre: se lo script manca, bash esce con un codice d'errore, che
+Kalico si limita a riportare. La matrice resta spenta e la stampa parte comunque.
 
 `[gcode_shell_command]` non richiede niente da installare: su **Kalico è nel core del firmware**,
 a differenza di Klipper dove è l'estensione *G-Code Shell Command* da copiare a mano in

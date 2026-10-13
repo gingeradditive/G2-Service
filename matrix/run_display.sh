@@ -3,7 +3,7 @@
 # Scrive un messaggio sulla matrice LED. È il comando che Kalico invoca da
 # `[gcode_shell_command LED_MSG]` (vedi docs/06-matrice-led.md):
 #
-#   command: /home/pi/G2-Service/matrix/run_display.sh
+#   command: /bin/bash /home/pi/G2-Service/matrix/run_display.sh
 #
 # Esiste perché `gcode_shell_command` vuole un singolo eseguibile a cui accoda i `PARAMS`:
 # non ci si può infilare la riga `venv/bin/python led_matrix_display.py`.
