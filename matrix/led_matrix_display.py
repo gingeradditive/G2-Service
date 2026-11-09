@@ -26,14 +26,20 @@ from PIL import Image, ImageDraw
 
 PID_FILE = "/tmp/led_matrix_display.pid"
 
+# Clock SPI in kHz. Il default di luma è 8 MHz, troppo per i cavi lunghi della G2: i fronti di
+# CLK/DIN arrivano degradati, i MAX7219 leggono dati sporchi e la matrice si accende tutta rossa.
+# Per un messaggio statico la velocità non conta, quindi si sta al minimo che luma accetta.
+SPI_SPEEDS_KHZ = (500, 1000, 2000, 4000, 8000)
+DEFAULT_SPI_SPEED_KHZ = 500
+
 
 def get_text_size(message, font):
     return textsize(message, font=proportional(font))
 
 
-def create_device(cascaded=1, block_orientation=-90, rotate=0):
+def create_device(cascaded=1, block_orientation=-90, rotate=0, spi_speed_khz=DEFAULT_SPI_SPEED_KHZ):
     """Create and return a MAX7219 device instance."""
-    serial = spi(port=0, device=0, gpio=noop())
+    serial = spi(port=0, device=0, gpio=noop(), bus_speed_hz=spi_speed_khz * 1000)
     device = max7219(
         serial,
         cascaded=cascaded,
@@ -121,6 +127,14 @@ def main():
         metavar="[0-255]",
         help="Display brightness (default: 16).",
     )
+    parser.add_argument(
+        "--spi-speed",
+        type=int,
+        default=DEFAULT_SPI_SPEED_KHZ,
+        choices=SPI_SPEEDS_KHZ,
+        metavar="KHZ",
+        help=f"SPI clock in kHz, one of {SPI_SPEEDS_KHZ} (default: {DEFAULT_SPI_SPEED_KHZ}).",
+    )
 
     args = parser.parse_args()
 
@@ -134,7 +148,7 @@ def main():
     atexit.register(remove_pid_file)
 
     # Create device
-    device = create_device(cascaded=args.cascaded)
+    device = create_device(cascaded=args.cascaded, spi_speed_khz=args.spi_speed)
     device.contrast(args.brightness)
 
     # Display static centered text

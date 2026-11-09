@@ -27,6 +27,26 @@ Cablaggio (rif. [pinout.xyz](https://pinout.xyz/pinout/pin24_gpio8/)):
 | CS | CE0 / GPIO8 (pin 24) |
 | CLK | SCLK / GPIO11 (pin 23) |
 
+### Clock SPI
+
+Lo script apre lo SPI a **500 kHz**, non agli 8 MHz che `luma` usa di default. Sulla G2 i cavi
+fra Raspberry e matrice sono molto lunghi: a 8 MHz i fronti di CLK e DIN arrivano degradati, i
+MAX7219 leggono dati sporchi e la matrice resta **tutta rossa** invece di mostrare il messaggio.
+Per un testo statico la velocità non conta (un aggiornamento di 8 moduli sono pochi kbit),
+quindi si sta al minimo che `luma` accetta.
+
+Si cambia con `--spi-speed` (in kHz: 500, 1000, 2000, 4000, 8000).
+
+Il clock basso da solo **non basta** se il telaio non è a terra. Sulla macchina del 2026-11-09
+la matrice restava rossa anche a 500 kHz, e si è sistemata solo **mettendo a terra il telaio**:
+erano disturbi elettromagnetici (EMI) indotti sui cavi lunghi. Quindi, se la matrice è tutta rossa:
+
+1. verificare che il **telaio sia a terra**;
+2. poi il resto del cablaggio: massa comune fra Raspberry e matrice, CLK lontano dai cavi di
+   potenza, alimentazione a 5 V che cede sugli ultimi moduli.
+
+Il clock a 500 kHz resta comunque: non costa niente e lascia più margine contro i disturbi.
+
 ## Perché sta in G2-Service
 
 La matrice è **hardware dell'host**, non della stampante: si pilota da GPIO/SPI con privilegi di
