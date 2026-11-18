@@ -3,7 +3,13 @@
 LED Matrix Text Display for Raspberry Pi
 Uses MAX7219 LED matrix connected via SPI (GPIO8/CE0 as chip select).
 
-Wiring (matching https://pinout.xyz/pinout/pin24_gpio8/):
+Two backends:
+  - SPI (default): the MAX7219 chain is wired straight to the Raspberry Pi.
+  - UART (--uart /dev/serial0): a microcontroller next to the matrix (ESP32-C3) drives it and
+    receives the bitmap over a single slow serial line. Used where the cable is too long and
+    noisy for SPI (see docs/06-matrice-led.md).
+
+SPI wiring (matching https://pinout.xyz/pinout/pin24_gpio8/):
   - VCC  -> 5V (Pin 2)
   - GND  -> GND (Pin 6)
   - DIN  -> MOSI / GPIO10 (Pin 19)
@@ -16,6 +22,7 @@ import atexit
 import os
 import signal
 import sys
+import termios
 import time
 
 from luma.core.interface.serial import noop, spi
@@ -31,6 +38,16 @@ PID_FILE = "/tmp/led_matrix_display.pid"
 # Per un messaggio statico la velocità non conta, quindi si sta al minimo che luma accetta.
 SPI_SPEEDS_KHZ = (500, 1000, 2000, 4000, 8000)
 DEFAULT_SPI_SPEED_KHZ = 500
+
+# Backend UART: un frame contiene l'intera bitmap, così il microcontrollore non deve sapere
+# niente di font e testo. Formato:
+#   A5 5A | moduli (1 byte) | intensità 0-15 (1 byte) | 8 righe x moduli byte | CRC-8
+# Riga per riga, un byte per modulo; bit b = colonna b del modulo, a partire da sinistra.
+# Il CRC-8 (polinomio 0x07) copre moduli, intensità e bitmap: un frame rovinato dai
+# disturbi viene scartato e la matrice tiene l'ultimo messaggio valido.
+UART_BAUD = termios.B9600
+UART_HEADER = b"\xa5\x5a"
+UART_RESEND_SECONDS = 5
 
 
 def get_text_size(message, font):
@@ -50,17 +67,69 @@ def create_device(cascaded=1, block_orientation=-90, rotate=0, spi_speed_khz=DEF
     return device
 
 
-def display_static(device, message, font=None):
-    """Display static centered text on the matrix."""
+def render_image(width, height, message, font=None):
+    """Render centered text into a 1-bit image of the matrix size."""
     if font is None:
         font = CP437_FONT
-    image = Image.new("1", (device.width, device.height))
+    image = Image.new("1", (width, height))
     draw = ImageDraw.Draw(image)
     text_width, text_height = get_text_size(message, font)
-    x = max(0, (device.width - text_width) // 2)
-    y = max(0, (device.height - text_height) // 2)
+    x = max(0, (width - text_width) // 2)
+    y = max(0, (height - text_height) // 2)
     text(draw, (x, y), message, fill="white", font=proportional(font))
-    device.display(image)
+    return image
+
+
+def display_static(device, message, font=None):
+    """Display static centered text on the matrix."""
+    device.display(render_image(device.width, device.height, message, font))
+
+
+def crc8(data):
+    crc = 0
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x07) & 0xFF if crc & 0x80 else (crc << 1) & 0xFF
+    return crc
+
+
+def build_uart_frame(image, cascaded, brightness):
+    """Encode the image as a UART frame for the matrix microcontroller."""
+    pixels = image.load()
+    body = bytearray([cascaded, brightness >> 4])  # MAX7219 intensity is 0-15
+    for y in range(8):
+        for module in range(cascaded):
+            byte = 0
+            for bit in range(8):
+                if pixels[module * 8 + bit, y]:
+                    byte |= 1 << bit
+            body.append(byte)
+    return UART_HEADER + bytes(body) + bytes([crc8(body)])
+
+
+def open_uart(path):
+    """Open the serial port raw, 9600 8N1, without pyserial."""
+    fd = os.open(path, os.O_WRONLY | os.O_NOCTTY)
+    attrs = termios.tcgetattr(fd)
+    attrs[0] = 0                                                # iflag
+    attrs[1] = 0                                                # oflag: niente traduzioni
+    attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL     # cflag: 8N1
+    attrs[3] = 0                                                # lflag: raw
+    attrs[4] = attrs[5] = UART_BAUD
+    termios.tcsetattr(fd, termios.TCSANOW, attrs)
+    return fd
+
+
+def run_uart(path, message, cascaded, brightness):
+    """Send the frame and keep resending it, so an ESP reset or a lost frame heals itself."""
+    frame = build_uart_frame(render_image(cascaded * 8, 8, message), cascaded, brightness)
+    fd = open_uart(path)
+    print(f"Displaying via {path}: '{message}'")
+    while True:
+        os.write(fd, frame)
+        termios.tcdrain(fd)
+        time.sleep(UART_RESEND_SECONDS)
 
 
 def stop_previous_instance():
@@ -135,6 +204,13 @@ def main():
         metavar="KHZ",
         help=f"SPI clock in kHz, one of {SPI_SPEEDS_KHZ} (default: {DEFAULT_SPI_SPEED_KHZ}).",
     )
+    parser.add_argument(
+        "--uart",
+        metavar="DEVICE",
+        default=None,
+        help="Send the bitmap to the matrix microcontroller on this serial port "
+        "(e.g. /dev/serial0) instead of driving the MAX7219 over SPI.",
+    )
 
     args = parser.parse_args()
 
@@ -146,6 +222,10 @@ def main():
     stop_previous_instance()
     write_pid_file()
     atexit.register(remove_pid_file)
+
+    if args.uart:
+        run_uart(args.uart, message, args.cascaded, args.brightness)
+        return
 
     # Create device
     device = create_device(cascaded=args.cascaded, spi_speed_khz=args.spi_speed)

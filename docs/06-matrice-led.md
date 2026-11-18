@@ -47,6 +47,9 @@ erano disturbi elettromagnetici (EMI) indotti sui cavi lunghi. Quindi, se la mat
 
 Il clock a 500 kHz resta comunque: non costa niente e lascia più margine contro i disturbi.
 
+Su cavi lunghi (circa 5 m) nemmeno questo basta: le prove e la soluzione con un ESP32-C3
+accanto alla matrice, collegato in seriale, sono in [08 — Matrice LED su cavo lungo](08-matrice-led-cavo-lungo.md).
+
 ## Perché sta in G2-Service
 
 La matrice è **hardware dell'host**, non della stampante: si pilota da GPIO/SPI con privilegi di

@@ -7,6 +7,7 @@
 - [05 — Deploy e sviluppo](05-deploy-e-sviluppo.md) — porta, nginx, update_manager di Moonraker, `install.sh`, `rundev.sh`, mock, test
 - [06 — Matrice LED](06-matrice-led.md) — lo script che scrive i messaggi sulla matrice MAX7219, chiamato da Kalico
 - [07 — API: Chiavetta USB](07-proposta-api-usb.md) — presenza della chiavetta, navigazione, import dei G-code nella memoria interna
+- [08 — Matrice LED su cavo lungo](08-matrice-led-cavo-lungo.md) — prove del 2026-11-09, cause della matrice tutta rossa, soluzione con ESP32-C3 via seriale, indicazioni per la produzione
 - [TODO.md](TODO.md) — gli step di sviluppo in ordine, divisi tra implementazione corrente e implementazioni future
 - [Q&A.md](Q&A.md) — solo le domande ancora aperte. Quando una riceve risposta, esce da qui ed entra nella documentazione
 
